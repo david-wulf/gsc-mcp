@@ -2,15 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.quickWins = quickWins;
 const analytics_js_1 = require("../analytics.js");
-// Expected CTR by position (used to estimate traffic gain if position improves)
-const EXPECTED_CTR = [0.285, 0.157, 0.110, 0.080, 0.072, 0.051, 0.040, 0.032, 0.028, 0.025];
-function expectedCtrAtPosition(pos) {
-    if (pos <= 0)
-        return 0.285;
-    if (pos <= 10)
-        return EXPECTED_CTR[Math.floor(pos) - 1];
-    return Math.max(0.005, 0.025 - (pos - 10) * 0.002);
-}
 async function quickWins(days = 28, minImpressions = 100, maxPosition = 15, searchType = "web", device, country) {
     (0, analytics_js_1.assertValidDimensions)(searchType, ["query"]);
     const { startDate, endDate } = (0, analytics_js_1.getDateRange)(days);
@@ -23,6 +14,8 @@ async function quickWins(days = 28, minImpressions = 100, maxPosition = 15, sear
         dimensions: ["query"],
         searchType,
     });
+    // Kurve auf den ungefilterten Zeilen bauen, sonst ist sie nach oben verzerrt.
+    const curve = (0, analytics_js_1.buildClickCurve)(rows, "query rows of this request");
     const wins = [];
     for (const row of rows) {
         const position = row.position;
@@ -31,10 +24,10 @@ async function quickWins(days = 28, minImpressions = 100, maxPosition = 15, sear
             continue;
         if (impressions < minImpressions)
             continue;
-        // Opportunity = impressions * (CTR at position 3 - current CTR)
-        const targetCtr = expectedCtrAtPosition(3);
+        // Opportunity = impressions * (CTR auf Position 3 - aktuelle CTR)
+        const target = (0, analytics_js_1.expectedCtr)(3, curve);
         const currentCtr = row.ctr;
-        const opportunity = Math.round(impressions * Math.max(0, targetCtr - currentCtr));
+        const opportunity = Math.round(impressions * Math.max(0, target.ctr - currentCtr));
         wins.push({
             query: row.keys[0],
             clicks: row.clicks,
@@ -42,6 +35,7 @@ async function quickWins(days = 28, minImpressions = 100, maxPosition = 15, sear
             ctr: Math.round(row.ctr * 10000) / 100,
             position: Math.round(position * 10) / 10,
             opportunity,
+            targetCtrSource: target.source,
         });
     }
     wins.sort((a, b) => b.opportunity - a.opportunity);

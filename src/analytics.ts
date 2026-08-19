@@ -69,6 +69,86 @@ export function assertValidDimensions(searchType: SearchType, dimensions: string
   }
 }
 
+/**
+ * CTR-Erwartung pro Position.
+ *
+ * Die Studientabelle unten stammt aus einer branchenweiten Auswertung fremder
+ * Seiten. Sie ist nur der Rueckfall: gemessen an einer Content-Property liegt die
+ * echte CTR auf Position 1 bei 3,5 % gegen die 28,5 % der Tabelle - Faktor 8. Wer
+ * dagegen bewertet, stempelt fast jede Seite als unterdurchschnittlich und sagt
+ * damit etwas ueber die Studie, nicht ueber die Seite.
+ *
+ * Deshalb bauen die Tools ihre Kurve aus den Zeilen, die sie ohnehin schon geholt
+ * haben, und greifen nur dann auf die Tabelle zurueck, wenn ein Rang zu wenig
+ * Volumen fuer eine belastbare Messung hat.
+ */
+export const STUDY_CTR_BY_POSITION = [
+  0.285, 0.157, 0.11, 0.08, 0.072, 0.051, 0.04, 0.032, 0.028, 0.025,
+];
+
+export function studyCtrAt(position: number): number {
+  if (position <= 0) return STUDY_CTR_BY_POSITION[0];
+  if (position <= 10) return STUDY_CTR_BY_POSITION[Math.floor(position) - 1];
+  return Math.max(0.005, 0.025 - (position - 10) * 0.002);
+}
+
+export type CtrSource = "measured" | "study";
+
+export interface ClickCurve {
+  /** Rang -> gemessene CTR als Anteil (0-1). */
+  byRank: Map<number, number>;
+  /** Woraus die Kurve gebaut wurde, damit das Ergebnis einordbar bleibt. */
+  basis: string;
+  ranksMeasured: number;
+  impressionsConsidered: number;
+}
+
+/**
+ * Baut die CTR-pro-Rang-Kurve aus bereits geholten Zeilen.
+ *
+ * CTR je Rang ist Summe der Klicks durch Summe der Impressionen, nie ein Mittel
+ * aus Verhaeltnissen - sonst zaehlt eine Zeile mit drei Impressionen so viel wie
+ * eine mit dreissigtausend. Auf ungefilterten Zeilen aufrufen: baut man die Kurve
+ * erst nach einem Impressionsfilter, ist sie nach oben verzerrt.
+ */
+export function buildClickCurve(
+  rows: SearchAnalyticsRow[],
+  basis: string,
+  minImpressionsPerRank: number = 100
+): ClickCurve {
+  const buckets = new Map<number, { clicks: number; impressions: number }>();
+  let impressionsConsidered = 0;
+
+  for (const row of rows) {
+    if (!row.impressions) continue;
+    const rank = Math.max(1, Math.round(row.position));
+    const bucket = buckets.get(rank) || { clicks: 0, impressions: 0 };
+    bucket.clicks += row.clicks;
+    bucket.impressions += row.impressions;
+    buckets.set(rank, bucket);
+    impressionsConsidered += row.impressions;
+  }
+
+  const byRank = new Map<number, number>();
+  for (const [rank, bucket] of buckets) {
+    if (bucket.impressions < minImpressionsPerRank) continue;
+    byRank.set(rank, bucket.clicks / bucket.impressions);
+  }
+
+  return { byRank, basis, ranksMeasured: byRank.size, impressionsConsidered };
+}
+
+/** Gemessene CTR fuer diesen Rang, sonst die Studientabelle. */
+export function expectedCtr(
+  position: number,
+  curve?: ClickCurve
+): { ctr: number; source: CtrSource } {
+  const rank = Math.max(1, Math.round(position));
+  const measured = curve?.byRank.get(rank);
+  if (measured !== undefined) return { ctr: measured, source: "measured" };
+  return { ctr: studyCtrAt(position), source: "study" };
+}
+
 /** Devices as the API spells them in dimension filters. */
 export const DEVICES = ["MOBILE", "DESKTOP", "TABLET"] as const;
 export type Device = (typeof DEVICES)[number];

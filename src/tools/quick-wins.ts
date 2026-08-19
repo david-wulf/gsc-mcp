@@ -4,6 +4,9 @@ import {
   SearchType,
   assertValidDimensions,
   deviceCountryFilters,
+  buildClickCurve,
+  expectedCtr,
+  CtrSource,
 } from "../analytics.js";
 
 interface QuickWin {
@@ -13,15 +16,8 @@ interface QuickWin {
   ctr: number;
   position: number;
   opportunity: number;
-}
-
-// Expected CTR by position (used to estimate traffic gain if position improves)
-const EXPECTED_CTR = [0.285, 0.157, 0.110, 0.080, 0.072, 0.051, 0.040, 0.032, 0.028, 0.025];
-
-function expectedCtrAtPosition(pos: number): number {
-  if (pos <= 0) return 0.285;
-  if (pos <= 10) return EXPECTED_CTR[Math.floor(pos) - 1];
-  return Math.max(0.005, 0.025 - (pos - 10) * 0.002);
+  /** Woher die Ziel-CTR kam: aus der eigenen Kurve oder aus der Studientabelle. */
+  targetCtrSource: CtrSource;
 }
 
 export async function quickWins(
@@ -45,6 +41,9 @@ export async function quickWins(
     searchType,
   });
 
+  // Kurve auf den ungefilterten Zeilen bauen, sonst ist sie nach oben verzerrt.
+  const curve = buildClickCurve(rows, "query rows of this request");
+
   const wins: QuickWin[] = [];
 
   for (const row of rows) {
@@ -54,10 +53,10 @@ export async function quickWins(
     if (position < 4 || position > maxPosition) continue;
     if (impressions < minImpressions) continue;
 
-    // Opportunity = impressions * (CTR at position 3 - current CTR)
-    const targetCtr = expectedCtrAtPosition(3);
+    // Opportunity = impressions * (CTR auf Position 3 - aktuelle CTR)
+    const target = expectedCtr(3, curve);
     const currentCtr = row.ctr;
-    const opportunity = Math.round(impressions * Math.max(0, targetCtr - currentCtr));
+    const opportunity = Math.round(impressions * Math.max(0, target.ctr - currentCtr));
 
     wins.push({
       query: row.keys[0],
@@ -66,6 +65,7 @@ export async function quickWins(
       ctr: Math.round(row.ctr * 10000) / 100,
       position: Math.round(position * 10) / 10,
       opportunity,
+      targetCtrSource: target.source,
     });
   }
 
