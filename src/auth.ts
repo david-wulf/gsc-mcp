@@ -24,10 +24,15 @@ export function getConfig() {
 
   if (mode === "service_account") {
     const keyFile = process.env.GSC_KEY_FILE;
-    if (!keyFile) {
+    // GSC_SERVICE_ACCOUNT_JSON haelt den kompletten Schluessel als Zeichenkette.
+    // Damit kann ein Secret-Manager (Infisical) ihn zur Laufzeit einspeisen, ohne
+    // dass der Private Key je auf die Platte muss. Hat Vorrang vor GSC_KEY_FILE.
+    const inlineJson = process.env.GSC_SERVICE_ACCOUNT_JSON;
+    if (!keyFile && !inlineJson) {
       throw new Error(
-        "GSC_KEY_FILE environment variable is required in service_account mode. " +
-        "Set it to the path of your service account JSON key file, " +
+        "Either GSC_SERVICE_ACCOUNT_JSON or GSC_KEY_FILE is required in " +
+        "service_account mode. Set GSC_SERVICE_ACCOUNT_JSON to the contents of " +
+        "your service account JSON key, or GSC_KEY_FILE to its path, " +
         "or switch to OAuth by setting GSC_AUTH_MODE=oauth."
       );
     }
@@ -37,10 +42,10 @@ export function getConfig() {
         "Set it to your GSC property URL (e.g. https://yoursite.com/ or sc-domain:yoursite.com)."
       );
     }
-    if (!fs.existsSync(keyFile)) {
+    if (!inlineJson && keyFile && !fs.existsSync(keyFile)) {
       throw new Error(`Service account key file not found at: ${keyFile}`);
     }
-    return { keyFile, siteUrl: siteUrl || siteUrls[0], siteUrls };
+    return { keyFile, inlineJson, siteUrl: siteUrl || siteUrls[0], siteUrls };
   }
 
   // OAuth mode
@@ -50,19 +55,19 @@ export function getConfig() {
       "Set it to your GSC property URL (e.g. https://yoursite.com/ or sc-domain:yoursite.com)."
     );
   }
-  return { keyFile: undefined, siteUrl: siteUrl || siteUrls[0], siteUrls };
+  return { keyFile: undefined, inlineJson: undefined, siteUrl: siteUrl || siteUrls[0], siteUrls };
 }
 
 async function getServiceAccountClient(): Promise<searchconsole_v1.Searchconsole> {
-  const { keyFile } = getConfig();
+  const { keyFile, inlineJson } = getConfig();
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile,
-    scopes: [
-      "https://www.googleapis.com/auth/webmasters.readonly",
-      "https://www.googleapis.com/auth/webmasters",
-    ],
-  });
+  const scopes = [
+    "https://www.googleapis.com/auth/webmasters.readonly",
+    "https://www.googleapis.com/auth/webmasters",
+  ];
+  const auth = inlineJson
+    ? new google.auth.GoogleAuth({ credentials: JSON.parse(inlineJson), scopes })
+    : new google.auth.GoogleAuth({ keyFile, scopes });
 
   google.options({ auth });
   return google.searchconsole("v1");
