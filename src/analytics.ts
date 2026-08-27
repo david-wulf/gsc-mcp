@@ -46,6 +46,12 @@ export interface QueryParams {
   rowLimit?: number;
   /** Hard cap on rows fetched across all pages. Omit for no cap. */
   maxRows?: number;
+  /**
+   * Upstream's spelling of the same surface filter. `searchType` above is this
+   * fork's older name for it; fetchAllRows reads whichever is set, so upstream
+   * tools (the image suite, genai) merge without touching their call sites.
+   */
+  type?: SearchType;
 }
 
 /**
@@ -246,7 +252,9 @@ export async function fetchAllRows(params: QueryParams, siteUrlOverride?: string
         startDate: params.startDate,
         endDate: params.endDate,
         dimensions: params.dimensions,
-        type: params.searchType, // undefined => API default "web"
+        // Both spellings of the surface filter feed one API field. Undefined
+        // means the API default, "web".
+        type: params.type ?? params.searchType,
         dimensionFilterGroups: params.dimensionFilterGroups,
         rowLimit: pageSize,
         startRow,

@@ -20,5 +20,7 @@ interface AdvancedSearchResult {
     };
     filtersApplied: Filter[];
 }
-export declare function advancedSearchAnalytics(days?: number, dimensions?: string[], filters?: Filter[], rowLimit?: number, orderBy?: string, orderDirection?: string, siteUrl?: string, searchType?: SearchType): Promise<AdvancedSearchResult>;
+export declare function advancedSearchAnalytics(days?: number, dimensions?: string[], filters?: Filter[], rowLimit?: number, orderBy?: string, orderDirection?: string, siteUrl?: string, searchType?: SearchType): Promise<AdvancedSearchResult & {
+    searchType: string;
+}>;
 export {};

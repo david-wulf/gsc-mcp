@@ -14,6 +14,9 @@ export const GUARDRAIL_SUFFIX =
 export const VISUAL_SUFFIX =
   " PRESENTATION: Always present these results as a rich, interactive visualization using artifacts. Use summary cards for key metrics, colour-coded indicators for severity or change direction (green for positive, red for negative), bar charts or sparklines for comparisons, and tabbed sections to organise different categories of results. Make the output visually scannable and dashboard-like rather than plain text or raw tables.";
 
+export const POSITION_CAVEAT =
+  " POSITION: position is an impression-weighted average over real impressions, blended across queries, devices and countries. It is not a rank-tracker rank. Deep positions are only recorded when a user actually reaches that part of the results, so values beyond page one rest on sparse data. Treat absolute positions as directional and prefer position deltas between periods when judging change.";
+
 /**
  * Wraps tool results with a _meta provenance field so Claude
  * knows the data source and is anchored to the actual numbers.
@@ -21,7 +24,9 @@ export const VISUAL_SUFFIX =
 export function withMeta(
   data: unknown,
   toolName: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  source: string = "Google Search Console API (live data)",
+  note: string = "All numbers in this response come directly from the Google Search Console API. They are exact values, not estimates. Base your analysis only on this data. Do not invent or assume additional context."
 ): {
   _meta: {
     source: string;
@@ -33,11 +38,10 @@ export function withMeta(
 } {
   return {
     _meta: {
-      source: "Google Search Console API (live data)",
+      source,
       tool: toolName,
       parameters: params,
-      note:
-        "All numbers in this response come directly from the Google Search Console API. They are exact values, not estimates. Base your analysis only on this data. Do not invent or assume additional context.",
+      note,
     },
     data,
   };

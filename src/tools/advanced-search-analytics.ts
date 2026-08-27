@@ -29,8 +29,9 @@ export async function advancedSearchAnalytics(
   orderDirection: string = "descending",
   siteUrl?: string,
   searchType: SearchType = "web"
-): Promise<AdvancedSearchResult> {
+): Promise<AdvancedSearchResult & { searchType: string }> {
   assertValidDimensions(searchType, dimensions);
+
   const { startDate, endDate } = getDateRange(days);
 
   // Build dimension filter groups from user-provided filters
@@ -49,7 +50,7 @@ export async function advancedSearchAnalytics(
       startDate,
       endDate,
       dimensions,
-      searchType,
+      type: searchType,
       dimensionFilterGroups,
     },
     siteUrl
@@ -78,5 +79,6 @@ export async function advancedSearchAnalytics(
     dimensions,
     period: { startDate, endDate },
     filtersApplied: filters,
+    searchType: searchType || "web",
   };
 }

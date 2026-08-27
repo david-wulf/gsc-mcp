@@ -4,3 +4,7 @@ node_modules/
 !package.json
 !package-lock.json
 !tsconfig.json
+*.mcpb
+!manifest.json
+demo-mock/
+probe-platform-properties.mjs

@@ -19,7 +19,7 @@ async function advancedSearchAnalytics(days = 28, dimensions = ["query"], filter
         startDate,
         endDate,
         dimensions,
-        searchType,
+        type: searchType,
         dimensionFilterGroups,
     }, siteUrl);
     // Sort
@@ -43,5 +43,6 @@ async function advancedSearchAnalytics(days = 28, dimensions = ["query"], filter
         dimensions,
         period: { startDate, endDate },
         filtersApplied: filters,
+        searchType: searchType || "web",
     };
 }

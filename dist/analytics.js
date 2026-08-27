@@ -177,7 +177,9 @@ async function fetchAllRows(params, siteUrlOverride) {
                 startDate: params.startDate,
                 endDate: params.endDate,
                 dimensions: params.dimensions,
-                type: params.searchType, // undefined => API default "web"
+                // Both spellings of the surface filter feed one API field. Undefined
+                // means the API default, "web".
+                type: params.type ?? params.searchType,
                 dimensionFilterGroups: params.dimensionFilterGroups,
                 rowLimit: pageSize,
                 startRow,

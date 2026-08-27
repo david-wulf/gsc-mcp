@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { searchconsole_v1 } from "googleapis";
 import * as fs from "fs";
-import { authenticateWithOAuth } from "./oauth.js";
+import { authenticateWithOAuth, getScopeTier, scopesForTier } from "./oauth.js";
 
 let cachedClient: searchconsole_v1.Searchconsole | null = null;
 
@@ -61,10 +61,9 @@ export function getConfig() {
 async function getServiceAccountClient(): Promise<searchconsole_v1.Searchconsole> {
   const { keyFile, inlineJson } = getConfig();
 
-  const scopes = [
-    "https://www.googleapis.com/auth/webmasters.readonly",
-    "https://www.googleapis.com/auth/webmasters",
-  ];
+  // Same scope set as the OAuth flow, including auth/indexing on the full
+  // tier so submit_url / submit_batch work in service-account mode too (#2).
+  const scopes = scopesForTier(getScopeTier());
   const auth = inlineJson
     ? new google.auth.GoogleAuth({ credentials: JSON.parse(inlineJson), scopes })
     : new google.auth.GoogleAuth({ keyFile, scopes });

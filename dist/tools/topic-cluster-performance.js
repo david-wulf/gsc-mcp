@@ -46,11 +46,11 @@ async function topicClusterPerformance(pathPattern, days = 28, searchType = "web
         : [];
     let totalClicks = 0;
     let totalImpressions = 0;
-    let positionSum = 0;
+    let positionWeight = 0;
     for (const row of pageRows) {
         totalClicks += row.clicks;
         totalImpressions += row.impressions;
-        positionSum += row.position;
+        positionWeight += row.position * row.impressions;
     }
     const topPages = pageRows
         .sort((a, b) => b.clicks - a.clicks)
@@ -77,8 +77,8 @@ async function topicClusterPerformance(pathPattern, days = 28, searchType = "web
         averageCtr: totalImpressions > 0
             ? Math.round((totalClicks / totalImpressions) * 10000) / 100
             : 0,
-        averagePosition: pageRows.length > 0
-            ? Math.round((positionSum / pageRows.length) * 10) / 10
+        averagePosition: totalImpressions > 0
+            ? Math.round((positionWeight / totalImpressions) * 10) / 10
             : 0,
         pageCount: pageRows.length,
         topPages,
