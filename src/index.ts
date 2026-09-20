@@ -46,7 +46,7 @@ import { imagePageAudit } from "./tools/image-page-audit.js";
 
 const server = new McpServer({
   name: "gsc-mcp",
-  version: "2.5.1",
+  version: "2.6.0",
 });
 
 // Shared GSC surface (search type) parameter. "web" is the API default and keeps
@@ -764,13 +764,13 @@ async function main() {
     process.exit(code);
   }
   if (cmd === "--version" || cmd === "-v") {
-    console.log("2.5.1");
+    console.log("2.6.0");
     process.exit(0);
   }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("GSC MCP server v2.5.1 running on stdio");
+  console.error("GSC MCP server v2.6.0 running on stdio (33 tools)");
 }
 
 main().catch((error) => {

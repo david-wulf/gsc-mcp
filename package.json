@@ -1,6 +1,6 @@
 {
   "name": "suganthan-gsc-mcp",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "description": "Google Search Console MCP server for Claude. Fork of Suganthans-GSC-MCP v2.5.1 with 33 SEO analysis tools: everything upstream ships (quick wins, traffic drops, content decay, cannibalisation, CTR opportunities, multi-site dashboards, the image-search suite, generative AI conversation-query detection, image page audit) plus discover_analysis, image_analysis, search_appearance and query_count, a dimension guard, device/country filters, measured click curves, and service-account keys from a secret manager. OAuth and service account support.",
   "main": "dist/index.js",
   "bin": {
