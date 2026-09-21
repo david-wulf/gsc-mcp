@@ -2,7 +2,9 @@
 
 An MCP server for Google Search Console that lets you ask Claude questions about your search data and get real answers. Not raw API rows. Actual analysis.
 
-29 tools. OAuth or service account. Free and open source. Runs on your machine: your data goes straight from this computer to Google, and nothing passes through anyone else's servers.
+33 tools. OAuth or service account. Free and open source. Runs on your machine: your data goes straight from this computer to Google, and nothing passes through anyone else's servers.
+
+> **This is a fork.** It tracks [Suganthan-Mohanadasan/Suganthans-GSC-MCP](https://github.com/Suganthan-Mohanadasan/Suganthans-GSC-MCP) and currently sits on upstream v2.5.1. On top of that it adds four tools (`discover_analysis`, `image_analysis`, `search_appearance`, `query_count`), a dimension guard that rejects illegal search-type/dimension combinations before the API returns an opaque 400, optional device and country filters on the core analysis tools, CTR benchmarking against the property's own measured click curve instead of a third-party study table, and service-account keys read from a secret manager rather than a file on disk. Fork version 2.6.0. Everything below that is not marked as fork-only comes from upstream.
 
 > **Full setup guide with screenshots:** [suganthan.com/blog/google-search-console-mcp-server/](https://suganthan.com/blog/google-search-console-mcp-server/)
 
@@ -167,7 +169,16 @@ For multiple properties, add `GSC_SITE_URLS`:
 
 You can also point a single query at any property your credentials can see without touching the config: `advanced_search_analytics`, `genai_conversation_queries`, and all 7 image-search analysis tools take an optional `site_url` parameter. "Which pages get image impressions but no clicks on sc-domain:secondsite.com?" just works.
 
-## All 29 tools
+## All 33 tools
+
+### Only in this fork (4)
+
+| Tool | What it answers |
+|---|---|
+| `discover_analysis` | How is Google Discover performing? Runs `type=discover` in isolation. Discover is feed-based, not query-based, so this returns top pages, a country split and a prior-period comparison — never a query breakdown, because the API has none to give |
+| `image_analysis` | How is image search performing as a surface? Runs `type=image` in isolation and returns top image queries, top pages and a prior-period comparison. Complements the per-tool image suite below by answering the surface-level question first |
+| `search_appearance` | Which rich-result types does the site win, and what do they earn? Breaks performance down by `searchAppearance`, which the API only allows as the sole grouping dimension — the guard enforces that instead of letting the call fail |
+| `query_count` | How many distinct keywords does the site rank for, and is that number growing? Counts unique queries, optionally scoped to a URL, sliced over time, or bucketed by position band |
 
 ### Analysis
 
@@ -181,7 +192,7 @@ You can also point a single query at any property your credentials can see witho
 | `cannibalization_check` | Keywords where multiple pages compete against each other |
 | `content_decay` | Pages declining across three consecutive 30-day periods |
 | `topic_cluster_performance` | Aggregated performance for all pages matching a URL path pattern |
-| `ctr_vs_benchmark` | Your actual CTR per position vs industry benchmarks |
+| `ctr_vs_benchmark` | Your actual CTR per position vs what this property itself earns at that position. Fork change: the baseline is the click curve built from the rows already fetched, not the industry study table — measured against a content property, position 1 runs around 3.5% where the study claims 28.5%, so the table stamps almost every page as underperforming. The study values survive only as a fallback for ranks with too little volume to measure |
 | `inspect_url` | Is this URL indexed? Last crawl date, canonical, robots/noindex issues |
 | `check_alerts` | Position drops, CTR collapses, click losses, disappeared pages. Severity-rated |
 | `content_recommendations` | Prioritised actions: pages to update, content to create, pages to consolidate |
