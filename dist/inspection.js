@@ -14,6 +14,8 @@ async function inspectUrl(url) {
     const result = response.data.inspectionResult;
     const indexStatus = result?.indexStatusResult;
     const mobileResult = result?.mobileUsabilityResult;
+    const richResult = result?.richResultsResult;
+    const ampResult = result?.ampResult;
     const issues = [];
     if (indexStatus?.robotsTxtState === "DISALLOWED") {
         issues.push("Blocked by robots.txt");
@@ -35,6 +37,17 @@ async function inspectUrl(url) {
             issues.push(`Mobile: ${issue.message || issue.issueType}`);
         }
     }
+    const richTypes = (richResult?.detectedItems || []).map((d) => ({
+        type: d.richResultType || "Unknown",
+        itemCount: (d.items || []).length,
+        issues: (d.items || []).flatMap((it) => (it.issues || []).map((is) => `${is.severity}: ${is.issueMessage}`)),
+    }));
+    for (const t of richTypes) {
+        for (const is of t.issues) {
+            if (is.startsWith("ERROR"))
+                issues.push(`Rich result ${t.type}: ${is}`);
+        }
+    }
     return {
         indexed: indexStatus?.coverageState === "Submitted and indexed" ||
             indexStatus?.verdict === "PASS",
@@ -49,6 +62,21 @@ async function inspectUrl(url) {
         canonicalMatch: googleCanonical === userCanonical || (!googleCanonical && !userCanonical),
         mobileUsability: mobileResult?.verdict || "Unknown",
         verdict: indexStatus?.verdict || "Unknown",
+        coverageState: indexStatus?.coverageState || null,
+        indexingDirective: indexStatus?.indexingState || null,
+        crawledAs: indexStatus?.crawledAs || null,
+        sitemaps: indexStatus?.sitemap || [],
+        referringUrls: indexStatus?.referringUrls || [],
+        richResults: richResult ? { verdict: richResult.verdict || "Unknown", types: richTypes } : null,
+        amp: ampResult
+            ? {
+                verdict: ampResult.verdict || null,
+                indexStatusVerdict: ampResult.ampIndexStatusVerdict || null,
+                ampUrl: ampResult.ampUrl || null,
+            }
+            : null,
+        inspectionResultLink: result?.inspectionResultLink || null,
         issues,
+        raw: result ?? null,
     };
 }

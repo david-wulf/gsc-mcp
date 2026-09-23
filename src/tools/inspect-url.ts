@@ -12,11 +12,22 @@ interface InspectionSummary {
   userCanonical: string | null;
   canonicalMatch: boolean;
   mobileUsability: string;
+  verdict: string;
+  coverageState: string | null;
+  indexingDirective: string | null;
+  robotsTxtState: string;
+  crawledAs: string | null;
+  sitemaps: string[];
+  referringUrls: string[];
+  richResults: InspectionResult["richResults"];
+  amp: InspectionResult["amp"];
+  inspectionResultLink: string | null;
   issues: string[];
   summary: string;
+  raw?: unknown;
 }
 
-export async function inspectUrlTool(url: string): Promise<InspectionSummary> {
+export async function inspectUrlTool(url: string, includeRaw = false): Promise<InspectionSummary> {
   const result = await inspectUrl(url);
 
   let summary: string;
@@ -45,7 +56,18 @@ export async function inspectUrlTool(url: string): Promise<InspectionSummary> {
     userCanonical: result.userCanonical,
     canonicalMatch: result.canonicalMatch,
     mobileUsability: result.mobileUsability,
+    verdict: result.verdict,
+    coverageState: result.coverageState,
+    indexingDirective: result.indexingDirective,
+    robotsTxtState: result.robotsTxtState,
+    crawledAs: result.crawledAs,
+    sitemaps: result.sitemaps,
+    referringUrls: result.referringUrls,
+    richResults: result.richResults,
+    amp: result.amp,
+    inspectionResultLink: result.inspectionResultLink,
     issues: result.issues,
     summary,
+    ...(includeRaw ? { raw: result.raw } : {}),
   };
 }

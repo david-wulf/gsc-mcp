@@ -11,6 +11,26 @@ export interface InspectionResult {
     canonicalMatch: boolean;
     mobileUsability: string;
     verdict: string;
+    coverageState: string | null;
+    indexingDirective: string | null;
+    crawledAs: string | null;
+    sitemaps: string[];
+    referringUrls: string[];
+    richResults: {
+        verdict: string;
+        types: {
+            type: string;
+            itemCount: number;
+            issues: string[];
+        }[];
+    } | null;
+    amp: {
+        verdict: string | null;
+        indexStatusVerdict: string | null;
+        ampUrl: string | null;
+    } | null;
+    inspectionResultLink: string | null;
     issues: string[];
+    raw: unknown;
 }
 export declare function inspectUrl(url: string): Promise<InspectionResult>;

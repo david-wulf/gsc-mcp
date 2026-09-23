@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.inspectUrlTool = inspectUrlTool;
 const inspection_js_1 = require("../inspection.js");
-async function inspectUrlTool(url) {
+async function inspectUrlTool(url, includeRaw = false) {
     const result = await (0, inspection_js_1.inspectUrl)(url);
     let summary;
     if (result.indexed && result.issues.length === 0) {
@@ -26,7 +26,18 @@ async function inspectUrlTool(url) {
         userCanonical: result.userCanonical,
         canonicalMatch: result.canonicalMatch,
         mobileUsability: result.mobileUsability,
+        verdict: result.verdict,
+        coverageState: result.coverageState,
+        indexingDirective: result.indexingDirective,
+        robotsTxtState: result.robotsTxtState,
+        crawledAs: result.crawledAs,
+        sitemaps: result.sitemaps,
+        referringUrls: result.referringUrls,
+        richResults: result.richResults,
+        amp: result.amp,
+        inspectionResultLink: result.inspectionResultLink,
         issues: result.issues,
         summary,
+        ...(includeRaw ? { raw: result.raw } : {}),
     };
 }

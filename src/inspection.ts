@@ -13,7 +13,20 @@ export interface InspectionResult {
   canonicalMatch: boolean;
   mobileUsability: string;
   verdict: string;
+  // Rohwerte der API, die oben nur verdichtet ankommen (indexingState oben = coverageState).
+  coverageState: string | null;
+  indexingDirective: string | null;
+  crawledAs: string | null;
+  sitemaps: string[];
+  referringUrls: string[];
+  richResults: {
+    verdict: string;
+    types: { type: string; itemCount: number; issues: string[] }[];
+  } | null;
+  amp: { verdict: string | null; indexStatusVerdict: string | null; ampUrl: string | null } | null;
+  inspectionResultLink: string | null;
   issues: string[];
+  raw: unknown;
 }
 
 export async function inspectUrl(url: string): Promise<InspectionResult> {
@@ -30,6 +43,8 @@ export async function inspectUrl(url: string): Promise<InspectionResult> {
   const result = response.data.inspectionResult;
   const indexStatus = result?.indexStatusResult;
   const mobileResult = result?.mobileUsabilityResult;
+  const richResult = result?.richResultsResult;
+  const ampResult = result?.ampResult;
 
   const issues: string[] = [];
 
@@ -59,6 +74,19 @@ export async function inspectUrl(url: string): Promise<InspectionResult> {
     }
   }
 
+  const richTypes = (richResult?.detectedItems || []).map((d) => ({
+    type: d.richResultType || "Unknown",
+    itemCount: (d.items || []).length,
+    issues: (d.items || []).flatMap((it) =>
+      (it.issues || []).map((is) => `${is.severity}: ${is.issueMessage}`)
+    ),
+  }));
+  for (const t of richTypes) {
+    for (const is of t.issues) {
+      if (is.startsWith("ERROR")) issues.push(`Rich result ${t.type}: ${is}`);
+    }
+  }
+
   return {
     indexed: indexStatus?.coverageState === "Submitted and indexed" ||
              indexStatus?.verdict === "PASS",
@@ -73,6 +101,21 @@ export async function inspectUrl(url: string): Promise<InspectionResult> {
     canonicalMatch: googleCanonical === userCanonical || (!googleCanonical && !userCanonical),
     mobileUsability: mobileResult?.verdict || "Unknown",
     verdict: indexStatus?.verdict || "Unknown",
+    coverageState: indexStatus?.coverageState || null,
+    indexingDirective: indexStatus?.indexingState || null,
+    crawledAs: indexStatus?.crawledAs || null,
+    sitemaps: indexStatus?.sitemap || [],
+    referringUrls: indexStatus?.referringUrls || [],
+    richResults: richResult ? { verdict: richResult.verdict || "Unknown", types: richTypes } : null,
+    amp: ampResult
+      ? {
+          verdict: ampResult.verdict || null,
+          indexStatusVerdict: ampResult.ampIndexStatusVerdict || null,
+          ampUrl: ampResult.ampUrl || null,
+        }
+      : null,
+    inspectionResultLink: result?.inspectionResultLink || null,
     issues,
+    raw: result ?? null,
   };
 }

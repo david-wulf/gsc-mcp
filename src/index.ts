@@ -163,14 +163,15 @@ server.registerTool(
 server.registerTool(
   "inspect_url",
   {
-    description: "Check if a URL is indexed and why or why not. Returns indexing status, last crawl date, canonical info, robots/noindex issues, and mobile usability in one answer." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: "Check if a URL is indexed and why or why not. Returns everything the URL Inspection API reports: verdict, coverage state, last crawl date, crawled as (mobile/desktop), Google vs. declared canonical, robots/noindex, page fetch state, sitemaps and referring URLs Google knows, detected rich results with issues, AMP status and a link to the report in Search Console. Set include_raw for the unmodified API response. Quota: 2,000 inspections per day and 600 per minute per property." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
     inputSchema: {
         url: z.string().describe("The full URL to inspect"),
+        include_raw: z.boolean().optional().describe("Also return the unmodified inspectionResult from the API (default false)"),
       },
   },
-  async ({ url }) => {
-      const results = await inspectUrlTool(url);
-      const wrapped = withMeta(results, "inspect_url", { url });
+  async ({ url, include_raw }) => {
+      const results = await inspectUrlTool(url, include_raw ?? false);
+      const wrapped = withMeta(results, "inspect_url", { url, include_raw: include_raw ?? false });
       return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
       };

@@ -132,13 +132,14 @@ server.registerTool("site_snapshot", {
 });
 // 6. Inspect URL
 server.registerTool("inspect_url", {
-    description: "Check if a URL is indexed and why or why not. Returns indexing status, last crawl date, canonical info, robots/noindex issues, and mobile usability in one answer." + guardrails_js_1.GUARDRAIL_SUFFIX + guardrails_js_1.VISUAL_SUFFIX,
+    description: "Check if a URL is indexed and why or why not. Returns everything the URL Inspection API reports: verdict, coverage state, last crawl date, crawled as (mobile/desktop), Google vs. declared canonical, robots/noindex, page fetch state, sitemaps and referring URLs Google knows, detected rich results with issues, AMP status and a link to the report in Search Console. Set include_raw for the unmodified API response. Quota: 2,000 inspections per day and 600 per minute per property." + guardrails_js_1.GUARDRAIL_SUFFIX + guardrails_js_1.VISUAL_SUFFIX,
     inputSchema: {
         url: zod_1.z.string().describe("The full URL to inspect"),
+        include_raw: zod_1.z.boolean().optional().describe("Also return the unmodified inspectionResult from the API (default false)"),
     },
-}, async ({ url }) => {
-    const results = await (0, inspect_url_js_1.inspectUrlTool)(url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "inspect_url", { url });
+}, async ({ url, include_raw }) => {
+    const results = await (0, inspect_url_js_1.inspectUrlTool)(url, include_raw ?? false);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "inspect_url", { url, include_raw: include_raw ?? false });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
