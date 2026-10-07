@@ -15,7 +15,9 @@ export function getAuthMode(): AuthMode {
 
 export function getConfig() {
   const mode = getAuthMode();
-  const siteUrl = process.env.GSC_SITE_URL;
+  // trim(): Secrets, die unter Windows bearbeitet wurden, tragen sonst ein "\r" mit in die
+  // Property-URL - Google findet die Property dann nicht.
+  const siteUrl = process.env.GSC_SITE_URL?.trim() || undefined;
   const siteUrls = process.env.GSC_SITE_URLS
     ? process.env.GSC_SITE_URLS.split(",").map((s) => s.trim()).filter(Boolean)
     : siteUrl
