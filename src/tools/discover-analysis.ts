@@ -54,8 +54,7 @@ function pct(curr: number, prior: number): number {
  */
 export async function discoverAnalysis(
   days: number = 28,
-  rowLimit: number = 50,
-  siteUrl?: string
+  rowLimit: number = 50
 ): Promise<DiscoverAnalysisResult> {
   const current = getDateRange(days);
   const prior = getPriorDateRange(days);
@@ -64,20 +63,16 @@ export async function discoverAnalysis(
 
   const [pageRows, priorPageRows, countryRows, dateRows] = await Promise.all([
     fetchAllRows(
-      { startDate: current.startDate, endDate: current.endDate, dimensions: ["page"], searchType: "discover" },
-      siteUrl
+      { startDate: current.startDate, endDate: current.endDate, dimensions: ["page"], searchType: "discover" }
     ),
     fetchAllRows(
-      { startDate: prior.startDate, endDate: prior.endDate, dimensions: ["page"], searchType: "discover" },
-      siteUrl
+      { startDate: prior.startDate, endDate: prior.endDate, dimensions: ["page"], searchType: "discover" }
     ),
     fetchAllRows(
-      { startDate: current.startDate, endDate: current.endDate, dimensions: ["country"], searchType: "discover" },
-      siteUrl
+      { startDate: current.startDate, endDate: current.endDate, dimensions: ["country"], searchType: "discover" }
     ),
     fetchAllRows(
-      { startDate: current.startDate, endDate: current.endDate, dimensions: ["date"], searchType: "discover" },
-      siteUrl
+      { startDate: current.startDate, endDate: current.endDate, dimensions: ["date"], searchType: "discover" }
     ),
   ]);
 

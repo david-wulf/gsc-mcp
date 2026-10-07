@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { searchconsole_v1 } from "googleapis";
 import * as fs from "fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { authenticateWithOAuth, getScopeTier, scopesForTier } from "./oauth.js";
 
 let cachedClient: searchconsole_v1.Searchconsole | null = null;
@@ -13,11 +14,31 @@ export function getAuthMode(): AuthMode {
   return "service_account";
 }
 
+// Property-Override je Tool-Aufruf. index.ts setzt ihn aus dem Parameter
+// `site_url`; getConfig() liefert ihn dann als siteUrl, so dass auch
+// verschachtelte Aufrufe (fetchAllRows, inspectUrl, generate_report) die
+// gewaehlte Property nutzen, ohne dass jede Tool-Funktion sie durchreichen muss.
+const siteUrlContext = new AsyncLocalStorage<string>();
+
+export function withSiteUrl<T>(siteUrl: string | undefined, fn: () => T): T {
+  const trimmed = siteUrl?.trim();
+  return trimmed ? siteUrlContext.run(trimmed, fn) : fn();
+}
+
+/** Property dieses Aufrufs, ohne zu werfen (fuer Metadaten). */
+export function currentSiteUrl(): string | undefined {
+  return (
+    siteUrlContext.getStore() ||
+    process.env.GSC_SITE_URL?.trim() ||
+    process.env.GSC_SITE_URLS?.split(",").map((s) => s.trim()).find(Boolean)
+  );
+}
+
 export function getConfig() {
   const mode = getAuthMode();
   // trim(): Secrets, die unter Windows bearbeitet wurden, tragen sonst ein "\r" mit in die
   // Property-URL - Google findet die Property dann nicht.
-  const siteUrl = process.env.GSC_SITE_URL?.trim() || undefined;
+  const siteUrl = siteUrlContext.getStore() || process.env.GSC_SITE_URL?.trim() || undefined;
   const siteUrls = process.env.GSC_SITE_URLS
     ? process.env.GSC_SITE_URLS.split(",").map((s) => s.trim()).filter(Boolean)
     : siteUrl

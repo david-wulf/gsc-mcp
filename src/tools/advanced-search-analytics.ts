@@ -27,7 +27,6 @@ export async function advancedSearchAnalytics(
   rowLimit: number = 100,
   orderBy: string = "clicks",
   orderDirection: string = "descending",
-  siteUrl?: string,
   searchType: SearchType = "web"
 ): Promise<AdvancedSearchResult & { searchType: string }> {
   assertValidDimensions(searchType, dimensions);
@@ -52,8 +51,7 @@ export async function advancedSearchAnalytics(
       dimensions,
       type: searchType,
       dimensionFilterGroups,
-    },
-    siteUrl
+    }
   );
 
   // Sort

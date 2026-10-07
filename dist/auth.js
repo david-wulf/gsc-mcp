@@ -34,10 +34,13 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAuthMode = getAuthMode;
+exports.withSiteUrl = withSiteUrl;
+exports.currentSiteUrl = currentSiteUrl;
 exports.getConfig = getConfig;
 exports.getSearchConsoleClient = getSearchConsoleClient;
 const googleapis_1 = require("googleapis");
 const fs = __importStar(require("fs"));
+const node_async_hooks_1 = require("node:async_hooks");
 const oauth_js_1 = require("./oauth.js");
 let cachedClient = null;
 function getAuthMode() {
@@ -46,9 +49,26 @@ function getAuthMode() {
         return "oauth";
     return "service_account";
 }
+// Property-Override je Tool-Aufruf. index.ts setzt ihn aus dem Parameter
+// `site_url`; getConfig() liefert ihn dann als siteUrl, so dass auch
+// verschachtelte Aufrufe (fetchAllRows, inspectUrl, generate_report) die
+// gewaehlte Property nutzen, ohne dass jede Tool-Funktion sie durchreichen muss.
+const siteUrlContext = new node_async_hooks_1.AsyncLocalStorage();
+function withSiteUrl(siteUrl, fn) {
+    const trimmed = siteUrl?.trim();
+    return trimmed ? siteUrlContext.run(trimmed, fn) : fn();
+}
+/** Property dieses Aufrufs, ohne zu werfen (fuer Metadaten). */
+function currentSiteUrl() {
+    return (siteUrlContext.getStore() ||
+        process.env.GSC_SITE_URL?.trim() ||
+        process.env.GSC_SITE_URLS?.split(",").map((s) => s.trim()).find(Boolean));
+}
 function getConfig() {
     const mode = getAuthMode();
-    const siteUrl = process.env.GSC_SITE_URL;
+    // trim(): Secrets, die unter Windows bearbeitet wurden, tragen sonst ein "\r" mit in die
+    // Property-URL - Google findet die Property dann nicht.
+    const siteUrl = siteUrlContext.getStore() || process.env.GSC_SITE_URL?.trim() || undefined;
     const siteUrls = process.env.GSC_SITE_URLS
         ? process.env.GSC_SITE_URLS.split(",").map((s) => s.trim()).filter(Boolean)
         : siteUrl
@@ -82,13 +102,30 @@ function getConfig() {
     }
     return { keyFile: undefined, inlineJson: undefined, siteUrl: siteUrl || siteUrls[0], siteUrls };
 }
+// sops (dotenv) und manche Secret-Manager machen aus dem "\n" im private_key echte
+// Zeilenumbrueche - dann ist der Schluessel kein gueltiges JSON mehr ("Bad control
+// character"). Der Wert kommt einzeilig an, echte Umbrueche koennen also nur aus diesen
+// Escapes stammen: zurueckverwandeln und erneut parsen.
+function parseServiceAccountJson(raw) {
+    try {
+        return JSON.parse(raw);
+    }
+    catch (error) {
+        try {
+            return JSON.parse(raw.replace(/\r?\n/g, "\\n"));
+        }
+        catch {
+            throw error;
+        }
+    }
+}
 async function getServiceAccountClient() {
     const { keyFile, inlineJson } = getConfig();
     // Same scope set as the OAuth flow, including auth/indexing on the full
     // tier so submit_url / submit_batch work in service-account mode too (#2).
     const scopes = (0, oauth_js_1.scopesForTier)((0, oauth_js_1.getScopeTier)());
     const auth = inlineJson
-        ? new googleapis_1.google.auth.GoogleAuth({ credentials: JSON.parse(inlineJson), scopes })
+        ? new googleapis_1.google.auth.GoogleAuth({ credentials: parseServiceAccountJson(inlineJson), scopes })
         : new googleapis_1.google.auth.GoogleAuth({ keyFile, scopes });
     googleapis_1.google.options({ auth });
     return googleapis_1.google.searchconsole("v1");

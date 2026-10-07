@@ -46,30 +46,25 @@ function pct(curr: number, prior: number): number {
  */
 export async function imageAnalysis(
   days: number = 28,
-  rowLimit: number = 50,
-  siteUrl?: string
+  rowLimit: number = 50
 ): Promise<ImageAnalysisResult> {
   const current = getDateRange(days);
   const prior = getPriorDateRange(days);
 
   const [queryRows, pageRows, priorRows] = await Promise.all([
     fetchAllRows(
-      { startDate: current.startDate, endDate: current.endDate, dimensions: ["query"], searchType: "image" },
-      siteUrl
+      { startDate: current.startDate, endDate: current.endDate, dimensions: ["query"], searchType: "image" }
     ),
     fetchAllRows(
-      { startDate: current.startDate, endDate: current.endDate, dimensions: ["page"], searchType: "image" },
-      siteUrl
+      { startDate: current.startDate, endDate: current.endDate, dimensions: ["page"], searchType: "image" }
     ),
     fetchAllRows(
-      { startDate: prior.startDate, endDate: prior.endDate, dimensions: ["date"], searchType: "image" },
-      siteUrl
+      { startDate: prior.startDate, endDate: prior.endDate, dimensions: ["date"], searchType: "image" }
     ),
   ]);
 
   const dateRowsCurrent = await fetchAllRows(
-    { startDate: current.startDate, endDate: current.endDate, dimensions: ["date"], searchType: "image" },
-    siteUrl
+    { startDate: current.startDate, endDate: current.endDate, dimensions: ["date"], searchType: "image" }
   );
 
   const curTotals = summarise(dateRowsCurrent);
