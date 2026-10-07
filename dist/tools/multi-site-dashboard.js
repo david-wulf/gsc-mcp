@@ -6,10 +6,10 @@ const auth_js_1 = require("../auth.js");
 async function siteSnapshotForUrl(siteUrl, days) {
     const current = (0, analytics_js_1.getDateRange)(days);
     const prior = (0, analytics_js_1.getPriorDateRange)(days);
-    const [currentRows, priorRows] = await Promise.all([
-        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["date"] }, siteUrl),
-        (0, analytics_js_1.fetchAllRows)({ startDate: prior.startDate, endDate: prior.endDate, dimensions: ["date"] }, siteUrl),
-    ]);
+    const [currentRows, priorRows] = await (0, auth_js_1.withSiteUrl)(siteUrl, () => Promise.all([
+        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["date"] }),
+        (0, analytics_js_1.fetchAllRows)({ startDate: prior.startDate, endDate: prior.endDate, dimensions: ["date"] }),
+    ]));
     const sum = (rows) => {
         let clicks = 0, impressions = 0, posWeight = 0;
         for (const r of rows) {

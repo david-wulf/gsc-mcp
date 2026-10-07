@@ -36,5 +36,5 @@ interface ImageAnalysisResult {
  * Isolated Google Image search performance. Image search supports the same
  * dimensions as web (query, page, country, device, date).
  */
-export declare function imageAnalysis(days?: number, rowLimit?: number, siteUrl?: string): Promise<ImageAnalysisResult>;
+export declare function imageAnalysis(days?: number, rowLimit?: number): Promise<ImageAnalysisResult>;
 export {};

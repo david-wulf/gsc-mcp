@@ -11,7 +11,7 @@ interface BucketRow {
         impressions: number;
     }>;
 }
-export declare function genaiConversationQueries(days?: number, minImpressions?: number, maxRowsPerBucket?: number, includeTimeline?: boolean, siteUrl?: string): Promise<{
+export declare function genaiConversationQueries(days?: number, minImpressions?: number, maxRowsPerBucket?: number, includeTimeline?: boolean): Promise<{
     period: {
         startDate: string;
         endDate: string;

@@ -44,8 +44,7 @@ export async function searchAppearance(
   appearance?: string,
   drillDimension: "page" | "query" = "page",
   searchType: SearchType = "web",
-  rowLimit: number = 50,
-  siteUrl?: string
+  rowLimit: number = 50
 ): Promise<SearchAppearanceResult> {
   const period = getDateRange(days);
 
@@ -56,8 +55,7 @@ export async function searchAppearance(
       endDate: period.endDate,
       dimensions: ["searchAppearance"],
       searchType,
-    },
-    siteUrl
+    }
   );
 
   const appearanceBreakdown: AppearanceRow[] = breakdownRows
@@ -87,8 +85,7 @@ export async function searchAppearance(
             ],
           },
         ],
-      },
-      siteUrl
+      }
     );
 
     drilldown = {

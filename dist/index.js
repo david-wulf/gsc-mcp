@@ -64,9 +64,7 @@ const registerToolOriginal = server.registerTool.bind(server);
 server.registerTool = (name, config, handler) => {
     if (NO_PROPERTY_TOOLS.has(name))
         return registerToolOriginal(name, config, handler);
-    const inputSchema = { ...(config.inputSchema ?? {}) };
-    if (!("site_url" in inputSchema))
-        inputSchema.site_url = SITE_URL_PARAM;
+    const inputSchema = { ...(config.inputSchema ?? {}), site_url: SITE_URL_PARAM };
     const wrapped = (args, extra) => (0, auth_js_1.withSiteUrl)(args?.site_url, () => handler(args, extra));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return registerToolOriginal(name, { ...config, inputSchema }, wrapped);
@@ -260,11 +258,10 @@ server.registerTool("advanced_search_analytics", {
         row_limit: zod_1.z.number().default(100).describe("Maximum rows to return (max 500)"),
         order_by: zod_1.z.string().default("clicks").describe("Sort by: clicks, impressions, ctr, position"),
         order_direction: zod_1.z.string().default("descending").describe("Sort direction: ascending, descending"),
-        site_url: zod_1.z.string().optional().describe("Override the default site URL"),
         surface: surfaceParam("Surface to query: web (default), image, video, news, discover, googleNews. Dimensions must be valid for the chosen surface."),
     },
-}, async ({ days, dimensions, filters, row_limit, order_by, order_direction, site_url, surface }) => {
-    const results = await (0, advanced_search_analytics_js_1.advancedSearchAnalytics)(days, dimensions, filters, row_limit, order_by, order_direction, site_url, surface);
+}, async ({ days, dimensions, filters, row_limit, order_by, order_direction, surface }) => {
+    const results = await (0, advanced_search_analytics_js_1.advancedSearchAnalytics)(days, dimensions, filters, row_limit, order_by, order_direction, surface);
     const wrapped = (0, guardrails_js_1.withMeta)(results, "advanced_search_analytics", { days, dimensions, filters, row_limit, order_by, surface });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
@@ -384,11 +381,10 @@ server.registerTool("discover_analysis", {
     inputSchema: {
         days: zod_1.z.number().default(28).describe("Number of days per period to compare"),
         row_limit: zod_1.z.number().default(50).describe("Max number of top pages to return"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property"),
     },
-}, async ({ days, row_limit, site_url }) => {
-    const results = await (0, discover_analysis_js_1.discoverAnalysis)(days, row_limit, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "discover_analysis", { days, row_limit, site_url });
+}, async ({ days, row_limit }) => {
+    const results = await (0, discover_analysis_js_1.discoverAnalysis)(days, row_limit);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "discover_analysis", { days, row_limit });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -399,11 +395,10 @@ server.registerTool("image_analysis", {
     inputSchema: {
         days: zod_1.z.number().default(28).describe("Number of days per period to compare"),
         row_limit: zod_1.z.number().default(50).describe("Max number of top queries/pages to return"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property"),
     },
-}, async ({ days, row_limit, site_url }) => {
-    const results = await (0, image_analysis_js_1.imageAnalysis)(days, row_limit, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_analysis", { days, row_limit, site_url });
+}, async ({ days, row_limit }) => {
+    const results = await (0, image_analysis_js_1.imageAnalysis)(days, row_limit);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_analysis", { days, row_limit });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -417,11 +412,10 @@ server.registerTool("search_appearance", {
         drill_dimension: zod_1.z.enum(["page", "query"]).default("page").describe("When drilling into an appearance, group by page or query"),
         search_type: zod_1.z.enum(["web", "image", "video", "news", "discover", "googleNews"]).default("web").describe("Surface to query the appearance breakdown for"),
         row_limit: zod_1.z.number().default(50).describe("Max number of drilldown rows to return"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property"),
     },
-}, async ({ days, appearance, drill_dimension, search_type, row_limit, site_url }) => {
-    const results = await (0, search_appearance_js_1.searchAppearance)(days, appearance, drill_dimension, search_type, row_limit, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "search_appearance", { days, appearance, drill_dimension, search_type, row_limit, site_url });
+}, async ({ days, appearance, drill_dimension, search_type, row_limit }) => {
+    const results = await (0, search_appearance_js_1.searchAppearance)(days, appearance, drill_dimension, search_type, row_limit);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "search_appearance", { days, appearance, drill_dimension, search_type, row_limit });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -466,11 +460,10 @@ server.registerTool("image_keyword_overview", {
         min_impressions: zod_1.z.number().default(50).describe("Minimum impressions threshold"),
         row_limit: zod_1.z.number().default(50).describe("Maximum rows to return"),
         order_by: zod_1.z.enum(["impressions", "clicks", "position"]).default("impressions").describe("Sort field"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property (e.g. sc-domain:example.com or https://www.example.com/)"),
     },
-}, async ({ days, min_impressions, row_limit, order_by, site_url }) => {
-    const results = await (0, image_keyword_overview_js_1.imageKeywordOverview)(days, min_impressions, row_limit, order_by, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_keyword_overview", { days, min_impressions, row_limit, order_by, site_url });
+}, async ({ days, min_impressions, row_limit, order_by }) => {
+    const results = await (0, image_keyword_overview_js_1.imageKeywordOverview)(days, min_impressions, row_limit, order_by);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_keyword_overview", { days, min_impressions, row_limit, order_by });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -482,11 +475,10 @@ server.registerTool("image_search_quick_wins", {
         days: zod_1.z.number().default(90).describe("Number of days to analyse"),
         min_impressions: zod_1.z.number().default(500).describe("Minimum impressions threshold"),
         max_position: zod_1.z.number().default(15).describe("Maximum position to include"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property (e.g. sc-domain:example.com or https://www.example.com/)"),
     },
-}, async ({ days, min_impressions, max_position, site_url }) => {
-    const results = await (0, image_search_quick_wins_js_1.imageSearchQuickWins)(days, min_impressions, max_position, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_search_quick_wins", { days, min_impressions, max_position, site_url });
+}, async ({ days, min_impressions, max_position }) => {
+    const results = await (0, image_search_quick_wins_js_1.imageSearchQuickWins)(days, min_impressions, max_position);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_search_quick_wins", { days, min_impressions, max_position });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -498,11 +490,10 @@ server.registerTool("compare_web_vs_image", {
         days: zod_1.z.number().default(90).describe("Number of days to analyse"),
         min_combined_impressions: zod_1.z.number().default(100).describe("Minimum combined (web + image) impressions to include the query"),
         row_limit: zod_1.z.number().default(50).describe("Maximum rows to return"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property (e.g. sc-domain:example.com or https://www.example.com/)"),
     },
-}, async ({ days, min_combined_impressions, row_limit, site_url }) => {
-    const results = await (0, compare_web_vs_image_js_1.compareWebVsImage)(days, min_combined_impressions, row_limit, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "compare_web_vs_image", { days, min_combined_impressions, row_limit, site_url });
+}, async ({ days, min_combined_impressions, row_limit }) => {
+    const results = await (0, compare_web_vs_image_js_1.compareWebVsImage)(days, min_combined_impressions, row_limit);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "compare_web_vs_image", { days, min_combined_impressions, row_limit });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -515,11 +506,10 @@ server.registerTool("image_pages_overview", {
         min_impressions: zod_1.z.number().default(100).describe("Minimum impressions threshold"),
         row_limit: zod_1.z.number().default(50).describe("Maximum rows to return"),
         order_by: zod_1.z.enum(["impressions", "clicks", "position"]).default("clicks").describe("Sort field"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property (e.g. sc-domain:example.com or https://www.example.com/)"),
     },
-}, async ({ days, min_impressions, row_limit, order_by, site_url }) => {
-    const results = await (0, image_pages_overview_js_1.imagePagesOverview)(days, min_impressions, row_limit, order_by, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_pages_overview", { days, min_impressions, row_limit, order_by, site_url });
+}, async ({ days, min_impressions, row_limit, order_by }) => {
+    const results = await (0, image_pages_overview_js_1.imagePagesOverview)(days, min_impressions, row_limit, order_by);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_pages_overview", { days, min_impressions, row_limit, order_by });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -532,11 +522,10 @@ server.registerTool("image_keyword_trends", {
         min_combined_impressions: zod_1.z.number().default(100).describe("Minimum combined impressions across both windows"),
         row_limit: zod_1.z.number().default(50).describe("Maximum rows to return"),
         order_by: zod_1.z.enum(["impressions_delta", "position_delta"]).default("impressions_delta").describe("Sort field"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property (e.g. sc-domain:example.com or https://www.example.com/)"),
     },
-}, async ({ days, min_combined_impressions, row_limit, order_by, site_url }) => {
-    const results = await (0, image_keyword_trends_js_1.imageKeywordTrends)(days, min_combined_impressions, row_limit, order_by, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_keyword_trends", { days, min_combined_impressions, row_limit, order_by, site_url });
+}, async ({ days, min_combined_impressions, row_limit, order_by }) => {
+    const results = await (0, image_keyword_trends_js_1.imageKeywordTrends)(days, min_combined_impressions, row_limit, order_by);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_keyword_trends", { days, min_combined_impressions, row_limit, order_by });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -549,11 +538,10 @@ server.registerTool("image_impressions_no_clicks", {
         min_impressions: zod_1.z.number().default(500).describe("Minimum impressions threshold"),
         max_clicks: zod_1.z.number().default(2).describe("Maximum clicks (filter to pages stuck in the impressions-no-clicks pattern)"),
         row_limit: zod_1.z.number().default(50).describe("Maximum rows to return"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property (e.g. sc-domain:example.com or https://www.example.com/)"),
     },
-}, async ({ days, min_impressions, max_clicks, row_limit, site_url }) => {
-    const results = await (0, image_impressions_no_clicks_js_1.imageImpressionsNoClicks)(days, min_impressions, max_clicks, row_limit, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_impressions_no_clicks", { days, min_impressions, max_clicks, row_limit, site_url });
+}, async ({ days, min_impressions, max_clicks, row_limit }) => {
+    const results = await (0, image_impressions_no_clicks_js_1.imageImpressionsNoClicks)(days, min_impressions, max_clicks, row_limit);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_impressions_no_clicks", { days, min_impressions, max_clicks, row_limit });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -563,11 +551,10 @@ server.registerTool("image_content_decay", {
     description: "Image-search version of content_decay. Three 30-day windows, flags pages with a consistent decline across all three. Defaults to a lower minimum click threshold than the web equivalent because image search produces lower click volumes overall." + guardrails_js_1.GUARDRAIL_SUFFIX + guardrails_js_1.VISUAL_SUFFIX + guardrails_js_1.POSITION_CAVEAT,
     inputSchema: {
         min_period3_clicks: zod_1.z.number().default(5).describe("Minimum image-search clicks in the oldest 30-day window required for a page to be considered"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property (e.g. sc-domain:example.com or https://www.example.com/)"),
     },
-}, async ({ min_period3_clicks, site_url }) => {
-    const results = await (0, image_content_decay_js_1.imageContentDecay)(min_period3_clicks, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_content_decay", { min_period3_clicks, site_url });
+}, async ({ min_period3_clicks }) => {
+    const results = await (0, image_content_decay_js_1.imageContentDecay)(min_period3_clicks);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "image_content_decay", { min_period3_clicks });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -580,11 +567,10 @@ server.registerTool("genai_conversation_queries", {
         min_impressions: zod_1.z.number().default(1).describe("Minimum impressions for a query to be listed (single-impression rows are evidence, not noise, so the default keeps them)"),
         max_rows_per_bucket: zod_1.z.number().default(50).describe("Maximum rows returned per bucket; totals always cover everything"),
         include_timeline: zod_1.z.boolean().default(true).describe("Include the monthly artefact timeline (one extra API call)"),
-        site_url: zod_1.z.string().optional().describe("Override the configured property (e.g. sc-domain:example.com)"),
     },
-}, async ({ days, min_impressions, max_rows_per_bucket, include_timeline, site_url }) => {
-    const results = await (0, genai_conversation_queries_js_1.genaiConversationQueries)(days, min_impressions, max_rows_per_bucket, include_timeline, site_url);
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "genai_conversation_queries", { days, min_impressions, max_rows_per_bucket, include_timeline, site_url });
+}, async ({ days, min_impressions, max_rows_per_bucket, include_timeline }) => {
+    const results = await (0, genai_conversation_queries_js_1.genaiConversationQueries)(days, min_impressions, max_rows_per_bucket, include_timeline);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "genai_conversation_queries", { days, min_impressions, max_rows_per_bucket, include_timeline });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
