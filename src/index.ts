@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { GUARDRAIL_SUFFIX, VISUAL_SUFFIX, POSITION_CAVEAT, withMeta } from "./guardrails.js";
+import { withSiteUrl } from "./auth.js";
 import { quickWins } from "./tools/quick-wins.js";
 import { ctrOpportunities } from "./tools/ctr-opportunities.js";
 import { trafficDrops } from "./tools/traffic-drops.js";
@@ -46,8 +47,34 @@ import { imagePageAudit } from "./tools/image-page-audit.js";
 
 const server = new McpServer({
   name: "gsc-mcp",
-  version: "2.6.0",
+  version: "2.7.0",
 });
+
+// Property pro Aufruf: Jedes Tool, das eine GSC-Property abfragt, bekommt den
+// optionalen Parameter `site_url`. Der Wrapper setzt ihn per withSiteUrl() fuer
+// die Dauer des Aufrufs, getConfig() liefert ihn dann ueberall als siteUrl.
+// Ausgenommen sind Tools ohne Property-Bezug: Indexing API (URL-basiert),
+// image_page_audit (holt Seiten direkt) und multi_site_dashboard (site_urls).
+const SITE_URL_PARAM = z
+  .string()
+  .optional()
+  .describe(
+    "GSC property for this call, e.g. sc-domain:example.com or https://www.example.com/. " +
+    "Omit to use this instance's default property (GSC_SITE_URL). The service account must have access to it."
+  );
+const NO_PROPERTY_TOOLS = new Set(["multi_site_dashboard", "submit_url", "submit_batch", "image_page_audit"]);
+
+const registerToolOriginal = server.registerTool.bind(server);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(server as { registerTool: unknown }).registerTool = (name: string, config: any, handler: any) => {
+  if (NO_PROPERTY_TOOLS.has(name)) return registerToolOriginal(name, config, handler);
+  const inputSchema = { ...(config.inputSchema ?? {}) };
+  if (!("site_url" in inputSchema)) inputSchema.site_url = SITE_URL_PARAM;
+  const wrapped = (args: { site_url?: string }, extra: unknown) =>
+    withSiteUrl(args?.site_url, () => handler(args, extra));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return registerToolOriginal(name, { ...config, inputSchema }, wrapped as any);
+};
 
 // Shared GSC surface (search type) parameter. "web" is the API default and keeps
 // every tool backwards-compatible. Page-based tools also accept "discover";
@@ -765,13 +792,13 @@ async function main() {
     process.exit(code);
   }
   if (cmd === "--version" || cmd === "-v") {
-    console.log("2.6.0");
+    console.log("2.7.0");
     process.exit(0);
   }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("GSC MCP server v2.6.0 running on stdio (33 tools)");
+  console.error("GSC MCP server v2.7.0 running on stdio (33 tools)");
 }
 
 main().catch((error) => {

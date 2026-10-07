@@ -5,6 +5,7 @@ const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const zod_1 = require("zod");
 const guardrails_js_1 = require("./guardrails.js");
+const auth_js_1 = require("./auth.js");
 const quick_wins_js_1 = require("./tools/quick-wins.js");
 const ctr_opportunities_js_1 = require("./tools/ctr-opportunities.js");
 const traffic_drops_js_1 = require("./tools/traffic-drops.js");
@@ -45,8 +46,31 @@ const genai_conversation_queries_js_1 = require("./tools/genai-conversation-quer
 const image_page_audit_js_1 = require("./tools/image-page-audit.js");
 const server = new mcp_js_1.McpServer({
     name: "gsc-mcp",
-    version: "2.6.0",
+    version: "2.7.0",
 });
+// Property pro Aufruf: Jedes Tool, das eine GSC-Property abfragt, bekommt den
+// optionalen Parameter `site_url`. Der Wrapper setzt ihn per withSiteUrl() fuer
+// die Dauer des Aufrufs, getConfig() liefert ihn dann ueberall als siteUrl.
+// Ausgenommen sind Tools ohne Property-Bezug: Indexing API (URL-basiert),
+// image_page_audit (holt Seiten direkt) und multi_site_dashboard (site_urls).
+const SITE_URL_PARAM = zod_1.z
+    .string()
+    .optional()
+    .describe("GSC property for this call, e.g. sc-domain:example.com or https://www.example.com/. " +
+    "Omit to use this instance's default property (GSC_SITE_URL). The service account must have access to it.");
+const NO_PROPERTY_TOOLS = new Set(["multi_site_dashboard", "submit_url", "submit_batch", "image_page_audit"]);
+const registerToolOriginal = server.registerTool.bind(server);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+server.registerTool = (name, config, handler) => {
+    if (NO_PROPERTY_TOOLS.has(name))
+        return registerToolOriginal(name, config, handler);
+    const inputSchema = { ...(config.inputSchema ?? {}) };
+    if (!("site_url" in inputSchema))
+        inputSchema.site_url = SITE_URL_PARAM;
+    const wrapped = (args, extra) => (0, auth_js_1.withSiteUrl)(args?.site_url, () => handler(args, extra));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return registerToolOriginal(name, { ...config, inputSchema }, wrapped);
+};
 // Shared GSC surface (search type) parameter. "web" is the API default and keeps
 // every tool backwards-compatible. Page-based tools also accept "discover";
 // query-based tools accept image/video/news but not discover (no query dimension).
@@ -589,12 +613,12 @@ async function main() {
         process.exit(code);
     }
     if (cmd === "--version" || cmd === "-v") {
-        console.log("2.6.0");
+        console.log("2.7.0");
         process.exit(0);
     }
     const transport = new stdio_js_1.StdioServerTransport();
     await server.connect(transport);
-    console.error("GSC MCP server v2.6.0 running on stdio (33 tools)");
+    console.error("GSC MCP server v2.7.0 running on stdio (33 tools)");
 }
 main().catch((error) => {
     console.error("Fatal error:", error);

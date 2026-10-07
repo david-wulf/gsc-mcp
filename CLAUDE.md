@@ -1,7 +1,7 @@
 # CLAUDE.md — Suganthans-GSC-MCP
 
 ## Zweck
-MCP-Server für die Google Search Console API (Search Analytics, URL Inspection, Sitemaps, Indexing API) mit 33 SEO-Analyse-Tools. Fork von `Suganthan-Mohanadasan/Suganthans-GSC-MCP` (Basis v2.5.1), Fork-Version 2.6.0; läuft bei David je Property als eigene Server-Instanz.
+MCP-Server für die Google Search Console API (Search Analytics, URL Inspection, Sitemaps, Indexing API) mit 33 SEO-Analyse-Tools. Fork von `Suganthan-Mohanadasan/Suganthans-GSC-MCP` (Basis v2.5.1), Fork-Version 2.7.0; läuft bei David je Property als eigene Server-Instanz.
 
 ## Aufbau
 - Einstieg: `src/index.ts` — `McpServer`, alle Tools per `server.registerTool()`; `node dist/index.js setup` startet den OAuth-Einrichtungsassistenten (`src/setup.ts`)
@@ -9,7 +9,7 @@ MCP-Server für die Google Search Console API (Search Analytics, URL Inspection,
 - `src/auth.ts` (Service Account / OAuth, `getConfig()`), `src/oauth.ts`, `src/analytics.ts` (Search-Analytics-Abfragen), `src/inspection.ts`, `src/guardrails.ts` (`GUARDRAIL_SUFFIX`, `VISUAL_SUFFIX`, `withMeta()`)
 - Herkunft/Git:
   - Remotes: `origin` = `david-wulf/gsc-mcp`, `hs` = `homeandsmart-gmbh/search-console-mcp`, `upstream` und `sug` = beide Suganthan (doppelt)
-  - Eigene Anpassungen: Tools `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`; Dimension-Guard; device/country-Filter; eigene Klickkurve statt Studientabelle; `GSC_SERVICE_ACCOUNT_JSON` aus dem Secret-Manager; vollständige `inspect_url`-Felder; SDK 1.30 + `registerTool`
+  - Eigene Anpassungen: Tools `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`; Dimension-Guard; device/country-Filter; eigene Klickkurve statt Studientabelle; `GSC_SERVICE_ACCOUNT_JSON` aus dem Secret-Manager; vollständige `inspect_url`-Felder; SDK 1.30 + `registerTool`; `site_url` pro Aufruf auf allen Property-Tools (Wrapper um `registerTool` in `index.ts` + `withSiteUrl()`/`AsyncLocalStorage` in `auth.ts`)
   - Upstream ziehen: `git fetch upstream && git merge upstream/main` (Muster: `0e331e5` „Merge upstream v2.5.1 into the fork"), danach README-Fork-Hinweis und `package.json`-Version nachziehen. Beiträge an Upstream laufen als PR von `david-wulf` (vgl. Merge PR #1)
 
 ## Tools
@@ -35,6 +35,7 @@ Keine Tests/Lint im Repo; `npm run build` ist die Typprüfung. Nachweise einzeln
 ## Neues Tool hinzufügen
 1. `src/tools/<name>.ts` mit exportierter async-Funktion; Abfragen über `src/analytics.ts`, Auth über `auth.ts`
 2. In `src/index.ts` `server.registerTool("<name>", { description: "…" + GUARDRAIL_SUFFIX (+ VISUAL_SUFFIX), inputSchema: { … zod … } }, async (args) => …)`; Ergebnis per `withMeta()` als JSON-Text (Muster: `query_count`)
+   `site_url` nicht selbst ins Schema schreiben — der Wrapper ergänzt ihn; Tools ohne Property-Bezug in `NO_PROPERTY_TOOLS` eintragen. Die Property immer über `getConfig().siteUrl` lesen, nie direkt aus `process.env`.
 3. README-Tabelle „Only in this fork" und Tool-Zahl in `package.json`-`description` anpassen, `npm run build`
 
 ## Grenzen

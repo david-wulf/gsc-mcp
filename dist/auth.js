@@ -34,10 +34,13 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAuthMode = getAuthMode;
+exports.withSiteUrl = withSiteUrl;
+exports.currentSiteUrl = currentSiteUrl;
 exports.getConfig = getConfig;
 exports.getSearchConsoleClient = getSearchConsoleClient;
 const googleapis_1 = require("googleapis");
 const fs = __importStar(require("fs"));
+const node_async_hooks_1 = require("node:async_hooks");
 const oauth_js_1 = require("./oauth.js");
 let cachedClient = null;
 function getAuthMode() {
@@ -46,9 +49,24 @@ function getAuthMode() {
         return "oauth";
     return "service_account";
 }
+// Property-Override je Tool-Aufruf. index.ts setzt ihn aus dem Parameter
+// `site_url`; getConfig() liefert ihn dann als siteUrl, so dass auch
+// verschachtelte Aufrufe (fetchAllRows, inspectUrl, generate_report) die
+// gewaehlte Property nutzen, ohne dass jede Tool-Funktion sie durchreichen muss.
+const siteUrlContext = new node_async_hooks_1.AsyncLocalStorage();
+function withSiteUrl(siteUrl, fn) {
+    const trimmed = siteUrl?.trim();
+    return trimmed ? siteUrlContext.run(trimmed, fn) : fn();
+}
+/** Property dieses Aufrufs, ohne zu werfen (fuer Metadaten). */
+function currentSiteUrl() {
+    return (siteUrlContext.getStore() ||
+        process.env.GSC_SITE_URL ||
+        process.env.GSC_SITE_URLS?.split(",").map((s) => s.trim()).find(Boolean));
+}
 function getConfig() {
     const mode = getAuthMode();
-    const siteUrl = process.env.GSC_SITE_URL;
+    const siteUrl = siteUrlContext.getStore() || process.env.GSC_SITE_URL;
     const siteUrls = process.env.GSC_SITE_URLS
         ? process.env.GSC_SITE_URLS.split(",").map((s) => s.trim()).filter(Boolean)
         : siteUrl
