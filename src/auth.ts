@@ -58,6 +58,22 @@ export function getConfig() {
   return { keyFile: undefined, inlineJson: undefined, siteUrl: siteUrl || siteUrls[0], siteUrls };
 }
 
+// sops (dotenv) und manche Secret-Manager machen aus dem "\n" im private_key echte
+// Zeilenumbrueche - dann ist der Schluessel kein gueltiges JSON mehr ("Bad control
+// character"). Der Wert kommt einzeilig an, echte Umbrueche koennen also nur aus diesen
+// Escapes stammen: zurueckverwandeln und erneut parsen.
+function parseServiceAccountJson(raw: string) {
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    try {
+      return JSON.parse(raw.replace(/\r?\n/g, "\\n"));
+    } catch {
+      throw error;
+    }
+  }
+}
+
 async function getServiceAccountClient(): Promise<searchconsole_v1.Searchconsole> {
   const { keyFile, inlineJson } = getConfig();
 
@@ -65,7 +81,7 @@ async function getServiceAccountClient(): Promise<searchconsole_v1.Searchconsole
   // tier so submit_url / submit_batch work in service-account mode too (#2).
   const scopes = scopesForTier(getScopeTier());
   const auth = inlineJson
-    ? new google.auth.GoogleAuth({ credentials: JSON.parse(inlineJson), scopes })
+    ? new google.auth.GoogleAuth({ credentials: parseServiceAccountJson(inlineJson), scopes })
     : new google.auth.GoogleAuth({ keyFile, scopes });
 
   google.options({ auth });
