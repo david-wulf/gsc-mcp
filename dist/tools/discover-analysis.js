@@ -23,15 +23,15 @@ function pct(curr, prior) {
  * only supports page / country / date dimensions here. Position/CTR-vs-position
  * benchmarks from web tools do not apply.
  */
-async function discoverAnalysis(days = 28, rowLimit = 50, siteUrl) {
+async function discoverAnalysis(days = 28, rowLimit = 50) {
     const current = (0, analytics_js_1.getDateRange)(days);
     const prior = (0, analytics_js_1.getPriorDateRange)(days);
     (0, analytics_js_1.assertValidDimensions)("discover", ["page"]);
     const [pageRows, priorPageRows, countryRows, dateRows] = await Promise.all([
-        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["page"], searchType: "discover" }, siteUrl),
-        (0, analytics_js_1.fetchAllRows)({ startDate: prior.startDate, endDate: prior.endDate, dimensions: ["page"], searchType: "discover" }, siteUrl),
-        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["country"], searchType: "discover" }, siteUrl),
-        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["date"], searchType: "discover" }, siteUrl),
+        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["page"], searchType: "discover" }),
+        (0, analytics_js_1.fetchAllRows)({ startDate: prior.startDate, endDate: prior.endDate, dimensions: ["page"], searchType: "discover" }),
+        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["country"], searchType: "discover" }),
+        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["date"], searchType: "discover" }),
     ]);
     const curTotals = totals(pageRows);
     const priorTotals = totals(priorPageRows);

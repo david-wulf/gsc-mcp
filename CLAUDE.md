@@ -35,7 +35,7 @@ Keine Tests/Lint im Repo; `npm run build` ist die Typprüfung. Nachweise einzeln
 ## Neues Tool hinzufügen
 1. `src/tools/<name>.ts` mit exportierter async-Funktion; Abfragen über `src/analytics.ts`, Auth über `auth.ts`
 2. In `src/index.ts` `server.registerTool("<name>", { description: "…" + GUARDRAIL_SUFFIX (+ VISUAL_SUFFIX), inputSchema: { … zod … } }, async (args) => …)`; Ergebnis per `withMeta()` als JSON-Text (Muster: `query_count`)
-   `site_url` nicht selbst ins Schema schreiben — der Wrapper ergänzt ihn; Tools ohne Property-Bezug in `NO_PROPERTY_TOOLS` eintragen. Die Property immer über `getConfig().siteUrl` lesen, nie direkt aus `process.env`.
+   `site_url` nicht selbst ins Schema schreiben — der Wrapper ergänzt ihn; Tools ohne Property-Bezug in `NO_PROPERTY_TOOLS` eintragen. Die Property immer über `getConfig().siteUrl` lesen, nie direkt aus `process.env`, und nie als Parameter durch Tool-Funktionen oder `fetchAllRows` reichen; für mehrere Properties in einem Aufruf `withSiteUrl()` (Muster: `multi-site-dashboard.ts`).
 3. README-Tabelle „Only in this fork" und Tool-Zahl in `package.json`-`description` anpassen, `npm run build`
 
 ## Grenzen

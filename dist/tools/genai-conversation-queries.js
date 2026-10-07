@@ -95,7 +95,7 @@ const CANNOT_SEE = [
     "The operator behind tracker probes and agent harnesses is not identifiable from Search Console data alone.",
     "Impressions in probe and harness buckets are machine-generated views, not people.",
 ];
-async function genaiConversationQueries(days = 480, minImpressions = 1, maxRowsPerBucket = 50, includeTimeline = true, siteUrl) {
+async function genaiConversationQueries(days = 480, minImpressions = 1, maxRowsPerBucket = 50, includeTimeline = true) {
     const { startDate, endDate } = (0, analytics_js_1.getDateRange)(days);
     const prefilter = [
         ARTEFACT_SRC,
@@ -121,7 +121,7 @@ async function genaiConversationQueries(days = 480, minImpressions = 1, maxRowsP
             },
         ],
         type: "web",
-    }, siteUrl);
+    });
     // Aggregate per query (rows arrive per query x page).
     const byQuery = new Map();
     for (const r of rows) {
@@ -193,7 +193,7 @@ async function genaiConversationQueries(days = 480, minImpressions = 1, maxRowsP
                 },
             ],
             type: "web",
-        }, siteUrl);
+        });
         const monthly = new Map();
         for (const r of dateRows) {
             const month = r.keys[0].slice(0, 7);

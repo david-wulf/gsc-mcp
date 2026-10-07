@@ -27,15 +27,15 @@ function pct(curr, prior) {
  * Isolated Google Image search performance. Image search supports the same
  * dimensions as web (query, page, country, device, date).
  */
-async function imageAnalysis(days = 28, rowLimit = 50, siteUrl) {
+async function imageAnalysis(days = 28, rowLimit = 50) {
     const current = (0, analytics_js_1.getDateRange)(days);
     const prior = (0, analytics_js_1.getPriorDateRange)(days);
     const [queryRows, pageRows, priorRows] = await Promise.all([
-        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["query"], searchType: "image" }, siteUrl),
-        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["page"], searchType: "image" }, siteUrl),
-        (0, analytics_js_1.fetchAllRows)({ startDate: prior.startDate, endDate: prior.endDate, dimensions: ["date"], searchType: "image" }, siteUrl),
+        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["query"], searchType: "image" }),
+        (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["page"], searchType: "image" }),
+        (0, analytics_js_1.fetchAllRows)({ startDate: prior.startDate, endDate: prior.endDate, dimensions: ["date"], searchType: "image" }),
     ]);
-    const dateRowsCurrent = await (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["date"], searchType: "image" }, siteUrl);
+    const dateRowsCurrent = await (0, analytics_js_1.fetchAllRows)({ startDate: current.startDate, endDate: current.endDate, dimensions: ["date"], searchType: "image" });
     const curTotals = summarise(dateRowsCurrent);
     const priorTotals = summarise(priorRows);
     const topQueries = queryRows

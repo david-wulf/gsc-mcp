@@ -12,7 +12,7 @@ const analytics_js_1 = require("../analytics.js");
  * @param appearance Optional. If provided, drills into that appearance type and
  *                   returns the top pages (or queries) driving it.
  */
-async function searchAppearance(days = 28, appearance, drillDimension = "page", searchType = "web", rowLimit = 50, siteUrl) {
+async function searchAppearance(days = 28, appearance, drillDimension = "page", searchType = "web", rowLimit = 50) {
     const period = (0, analytics_js_1.getDateRange)(days);
     // Step 1: always fetch the full appearance breakdown (searchAppearance alone).
     const breakdownRows = await (0, analytics_js_1.fetchAllRows)({
@@ -20,7 +20,7 @@ async function searchAppearance(days = 28, appearance, drillDimension = "page", 
         endDate: period.endDate,
         dimensions: ["searchAppearance"],
         searchType,
-    }, siteUrl);
+    });
     const appearanceBreakdown = breakdownRows
         .sort((a, b) => b.impressions - a.impressions)
         .map((r) => ({
@@ -45,7 +45,7 @@ async function searchAppearance(days = 28, appearance, drillDimension = "page", 
                     ],
                 },
             ],
-        }, siteUrl);
+        });
         drilldown = {
             appearance,
             dimension: drillDimension,

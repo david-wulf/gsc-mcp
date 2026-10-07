@@ -38,5 +38,5 @@ interface SearchAppearanceResult {
  * @param appearance Optional. If provided, drills into that appearance type and
  *                   returns the top pages (or queries) driving it.
  */
-export declare function searchAppearance(days?: number, appearance?: string, drillDimension?: "page" | "query", searchType?: SearchType, rowLimit?: number, siteUrl?: string): Promise<SearchAppearanceResult>;
+export declare function searchAppearance(days?: number, appearance?: string, drillDimension?: "page" | "query", searchType?: SearchType, rowLimit?: number): Promise<SearchAppearanceResult>;
 export {};

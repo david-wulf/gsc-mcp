@@ -39,5 +39,5 @@ interface DiscoverAnalysisResult {
  * only supports page / country / date dimensions here. Position/CTR-vs-position
  * benchmarks from web tools do not apply.
  */
-export declare function discoverAnalysis(days?: number, rowLimit?: number, siteUrl?: string): Promise<DiscoverAnalysisResult>;
+export declare function discoverAnalysis(days?: number, rowLimit?: number): Promise<DiscoverAnalysisResult>;
 export {};
