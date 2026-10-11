@@ -23,11 +23,12 @@ interface ImageFinding {
         iptc_caption: boolean;
         digital_source_type: string | null;
     } | null;
+    fetch_refused?: string;
     issues: string[];
 }
 interface PageAudit {
     url: string;
-    status: "ok" | "fetch_failed";
+    status: "ok" | "fetch_failed" | "fetch_refused";
     http_status: number | null;
     error?: string;
     page_checks?: {

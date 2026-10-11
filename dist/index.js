@@ -302,7 +302,7 @@ server.registerTool("content_recommendations", {
 server.registerTool("generate_report", {
     description: "Generate a comprehensive markdown performance report. Covers site snapshot, alerts, quick wins, traffic drops, content decay, and recommendations. Saves to disk for weekly reviews or scheduled reporting." + guardrails_js_1.GUARDRAIL_SUFFIX + guardrails_js_1.VISUAL_SUFFIX,
     inputSchema: {
-        output_path: zod_1.z.string().optional().describe("File path to save the report (default: ./gsc-report-{date}.md)"),
+        output_path: zod_1.z.string().optional().describe("File name for the report, no folders (default: gsc-report-{date}.md). Saved in GSC_REPORT_DIR or the server's working directory; an existing file is never overwritten."),
         days: zod_1.z.number().default(28).describe("Number of days to analyse"),
         include_sections: zod_1.z.array(zod_1.z.string()).optional().describe("Sections: snapshot, alerts, quick_wins, traffic_drops, content_decay, recommendations"),
     },

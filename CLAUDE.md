@@ -13,7 +13,7 @@ MCP-Server für die Google Search Console API (Search Analytics, URL Inspection,
   - Upstream ziehen: `git fetch upstream && git merge upstream/main` (Muster: `0e331e5` „Merge upstream v2.5.1 into the fork"), danach README-Fork-Hinweis und `package.json`-Version nachziehen. Beiträge an Upstream laufen als PR von `david-wulf` (vgl. Merge PR #1)
 
 ## Tools
-- Lesend: `quick_wins`, `ctr_opportunities`, `traffic_drops`, `content_gaps`, `site_snapshot`, `inspect_url`, `cannibalization_check`, `content_decay`, `topic_cluster_performance`, `ctr_vs_benchmark`, `verify_claim`, `advanced_search_analytics`, `check_alerts`, `content_recommendations`, `generate_report`, `multi_site_dashboard`, `list_sitemaps`, `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`, `genai_conversation_queries`, `image_keyword_overview`, `image_search_quick_wins`, `compare_web_vs_image`, `image_pages_overview`, `image_keyword_trends`, `image_impressions_no_clicks`, `image_content_decay`, `image_page_audit` (holt zusätzlich die Seite)
+- Lesend: `quick_wins`, `ctr_opportunities`, `traffic_drops`, `content_gaps`, `site_snapshot`, `inspect_url`, `cannibalization_check`, `content_decay`, `topic_cluster_performance`, `ctr_vs_benchmark`, `verify_claim`, `advanced_search_analytics`, `check_alerts`, `content_recommendations`, `generate_report`, `multi_site_dashboard`, `list_sitemaps`, `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`, `genai_conversation_queries`, `image_keyword_overview`, `image_search_quick_wins`, `compare_web_vs_image`, `image_pages_overview`, `image_keyword_trends`, `image_impressions_no_clicks`, `image_content_decay`, `image_page_audit` (holt zusätzlich die Seite — nur Hosts von Properties des Kontos, keine internen Adressen, über `src/safe-fetch.ts`)
 - **Schreibend**: `submit_url`, `submit_batch` (Indexing API), `submit_sitemap` (Sitemap in GSC einreichen)
 
 ## Lokal starten & prüfen
@@ -22,7 +22,7 @@ npm install
 npm run build        # tsc -> dist/
 npm start            # node dist/index.js
 ```
-Keine Tests/Lint im Repo; `npm run build` ist die Typprüfung. Nachweise einzelner Fixes liegen unter `docs/verification/`.
+`npm test` (baut und startet `test/hardening.test.mjs` mit `node:test`, offline: Fetch-Schutz von `image_page_audit`, Dateinamen-Grenze von `generate_report`); sonst kein Lint, `npm run build` ist die Typprüfung. Nachweise einzelner Fixes liegen unter `docs/verification/`.
 
 ## Einbindung in Claude
 - `~/.claude.json`: `gsc` (über `infisical-run.mjs … -- node …\Suganthans-GSC-MCP\dist\index.js`), `gsc-mb24` (direkt `node …/dist/index.js`)

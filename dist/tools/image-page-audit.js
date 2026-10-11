@@ -7,6 +7,8 @@ exports.imagePageAudit = imagePageAudit;
 const node_html_parser_1 = require("node-html-parser");
 const image_size_1 = require("image-size");
 const exifr_1 = __importDefault(require("exifr"));
+const auth_js_1 = require("../auth.js");
+const safe_fetch_js_1 = require("../safe-fetch.js");
 /**
  * Fetches pages from the user's own site and audits every image on them
  * against the on-page factors that drive image-search performance: alt text,
@@ -20,11 +22,19 @@ const exifr_1 = __importDefault(require("exifr"));
  * This is the bridge from "which pages fail" (image_impressions_no_clicks,
  * image_search_quick_wins) to "why they fail". It only ever fetches the
  * URLs it is given; no third-party service is involved.
+ *
+ * Fetch limits: page URLs must belong to a Search Console property this
+ * account can see (or one configured via GSC_SITE_URL / GSC_SITE_URLS).
+ * Images may sit on any host (CDNs), but no request, and no redirect hop,
+ * may go to a private, loopback or otherwise non-public address, and every
+ * body is capped in size. See safe-fetch.ts.
  */
 const USER_AGENT = "suganthan-gsc-mcp/2.5 image_page_audit (+https://github.com/Suganthan-Mohanadasan/Suganthans-GSC-MCP)";
 const PAGE_TIMEOUT_MS = 15000;
 const IMAGE_TIMEOUT_MS = 12000;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_PAGE_BYTES = 10 * 1024 * 1024;
+const PROPERTY_CACHE_MS = 10 * 60 * 1000;
 const INDEX_MIN_WIDTH = 250;
 const INDEX_MIN_HEIGHT = 200;
 const INDEX_MIN_AREA = 50000;
@@ -105,30 +115,50 @@ function walkForImageObjects(node, hits) {
             walkForImageObjects(value, hits);
     }
 }
-async function fetchWithTimeout(url, timeoutMs) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+let propertyCache = null;
+/** Properties whose hosts may be audited: the configured ones plus every property the account can see. */
+async function auditableProperties() {
+    const configured = [];
     try {
-        return await fetch(url, {
-            headers: { "User-Agent": USER_AGENT, Accept: "*/*" },
-            redirect: "follow",
-            signal: controller.signal,
-        });
+        const { siteUrl, siteUrls } = (0, auth_js_1.getConfig)();
+        if (siteUrl)
+            configured.push(siteUrl);
+        configured.push(...siteUrls);
     }
-    finally {
-        clearTimeout(timer);
+    catch {
+        // No property configured; the account's own list may still answer.
     }
+    if (!propertyCache || Date.now() - propertyCache.at > PROPERTY_CACHE_MS) {
+        try {
+            const sc = await (0, auth_js_1.getSearchConsoleClient)();
+            const res = await sc.sites.list({});
+            const listed = (res.data.siteEntry ?? [])
+                .map((entry) => entry.siteUrl)
+                .filter((url) => Boolean(url));
+            propertyCache = { at: Date.now(), siteUrls: listed };
+        }
+        catch {
+            // Fall back to the configured properties; do not cache the failure.
+        }
+    }
+    return [...new Set([...configured, ...(propertyCache?.siteUrls ?? [])])];
+}
+function fetchGuarded(url, timeoutMs, checkUrl) {
+    return (0, safe_fetch_js_1.safeFetch)(url, {
+        timeoutMs,
+        headers: { "User-Agent": USER_AGENT, Accept: "*/*" },
+        checkUrl,
+    });
 }
 async function auditImage(src, fetchMetadata) {
     const result = { fetched: false };
-    const response = await fetchWithTimeout(src, IMAGE_TIMEOUT_MS);
-    if (!response.ok)
+    const { response } = await fetchGuarded(src, IMAGE_TIMEOUT_MS);
+    if (!response.ok) {
+        await response.body?.cancel();
         return result;
-    const declared = Number(response.headers.get("content-length") ?? "0");
-    if (declared > MAX_IMAGE_BYTES)
-        return result;
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES)
+    }
+    const buffer = await (0, safe_fetch_js_1.readBodyLimited)(response, MAX_IMAGE_BYTES);
+    if (!buffer || buffer.length === 0)
         return result;
     result.fetched = true;
     result.bytes = buffer.length;
@@ -214,27 +244,42 @@ function imageIssues(finding) {
 }
 async function imagePageAudit(urls, fetchMetadata = true, maxImagesPerPage = 12, maxImagesReported = 20) {
     const audits = [];
+    const properties = await auditableProperties();
+    const checkPageHost = (url) => {
+        if (!(0, safe_fetch_js_1.hostMatchesProperties)(url.hostname, properties)) {
+            throw new safe_fetch_js_1.FetchBlockedError(properties.length === 0
+                ? "No Search Console property is configured or visible to this account, so no page may be audited"
+                : `${url.hostname} is not part of a Search Console property this account can see; image_page_audit only audits pages on your own properties`);
+        }
+    };
     for (const rawUrl of urls.slice(0, 5)) {
         const audit = { url: rawUrl, status: "ok", http_status: null };
         audits.push(audit);
         let response;
+        let pageUrl;
         try {
-            response = await fetchWithTimeout(rawUrl, PAGE_TIMEOUT_MS);
+            ({ response, url: pageUrl } = await fetchGuarded(rawUrl, PAGE_TIMEOUT_MS, checkPageHost));
         }
         catch (error) {
-            audit.status = "fetch_failed";
+            audit.status = error instanceof safe_fetch_js_1.FetchBlockedError ? "fetch_refused" : "fetch_failed";
             audit.error = error instanceof Error ? error.message : String(error);
             continue;
         }
         audit.http_status = response.status;
         if (!response.ok) {
+            await response.body?.cancel();
             audit.status = "fetch_failed";
             audit.error = `HTTP ${response.status}`;
             continue;
         }
-        const html = await response.text();
+        const body = await (0, safe_fetch_js_1.readBodyLimited)(response, MAX_PAGE_BYTES);
+        if (!body) {
+            audit.status = "fetch_failed";
+            audit.error = `Page larger than ${MAX_PAGE_BYTES / (1024 * 1024)} MB`;
+            continue;
+        }
+        const html = body.toString("utf8");
         const root = (0, node_html_parser_1.parse)(html);
-        const pageUrl = response.url || rawUrl;
         // ── Page-level checks ────────────────────────────────────────────
         const robotsContent = root
             .querySelectorAll('meta[name="robots"], meta[name="googlebot"]')
@@ -346,8 +391,11 @@ async function imagePageAudit(urls, fetchMetadata = true, maxImagesPerPage = 12,
             try {
                 Object.assign(finding, await auditImage(finding.src, fetchMetadata));
             }
-            catch {
-                // Fetch failure on one image never sinks the audit.
+            catch (error) {
+                // Fetch failure on one image never sinks the audit, but a refused
+                // fetch is reported so a blocked internal address is visible.
+                if (error instanceof safe_fetch_js_1.FetchBlockedError)
+                    finding.fetch_refused = error.message;
             }
         }
         for (const finding of findings)
