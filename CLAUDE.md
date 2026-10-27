@@ -8,7 +8,7 @@ MCP-Server für die Google Search Console API (Search Analytics, URL Inspection,
 - Tool-Logik: je Tool eine Datei in `src/tools/`
 - `src/auth.ts` (Service Account / OAuth, `getConfig()`), `src/oauth.ts`, `src/analytics.ts` (Search-Analytics-Abfragen), `src/inspection.ts`, `src/guardrails.ts` (`GUARDRAIL_SUFFIX`, `VISUAL_SUFFIX`, `withMeta()`)
 - Herkunft/Git:
-  - Remotes: `origin` = `david-wulf/gsc-mcp`, `hs` = `homeandsmart-gmbh/search-console-mcp`, `upstream` und `sug` = beide Suganthan (doppelt)
+  - Remotes: `origin` = `david-wulf/gsc-mcp`, `upstream` und `sug` = beide Suganthan (doppelt), dazu ein privater Spiegel (`git remote -v`)
   - Eigene Anpassungen: Tools `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`; Dimension-Guard; device/country-Filter; eigene Klickkurve statt Studientabelle; `GSC_SERVICE_ACCOUNT_JSON` aus dem Secret-Manager; vollständige `inspect_url`-Felder; SDK 1.32.1 + `registerTool`; `site_url` pro Aufruf auf allen Property-Tools (Wrapper um `registerTool` in `index.ts` + `withSiteUrl()`/`AsyncLocalStorage` in `auth.ts`)
   - Upstream ziehen: `git fetch upstream && git merge upstream/main` (Muster: `0e331e5` „Merge upstream v2.5.1 into the fork"), danach README-Fork-Hinweis und `package.json`-Version nachziehen. Beiträge an Upstream laufen als PR von `david-wulf` (vgl. Merge PR #1)
 

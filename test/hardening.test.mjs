@@ -24,10 +24,10 @@ const publicResolver = async () => ["93.184.216.34"];
 
 test("isBlockedAddress: private, loopback, link-local, CGNAT and mapped forms are blocked", () => {
   for (const address of [
-    "127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.20.1",
+    "127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1",
     "169.254.169.254", "100.72.91.118", "0.0.0.0", "224.0.0.1", "255.255.255.255",
     "::1", "::", "fe80::1", "fd00::1", "ff02::1",
-    "::ffff:192.168.20.1", "::ffff:c0a8:1401", "::ffff:127.0.0.1", "64:ff9b::10.0.0.1",
+    "::ffff:192.168.1.1", "::ffff:c0a8:0101", "::ffff:127.0.0.1", "64:ff9b::10.0.0.1",
     "not-an-ip",
   ]) {
     assert.equal(isBlockedAddress(address), true, address);
@@ -45,11 +45,11 @@ test("assertPublicUrl refuses non-http schemes, IP literals in private ranges an
     ["file:///etc/passwd", publicResolver],
     ["ftp://example.com/", publicResolver],
     ["http://127.0.0.1:8080/", publicResolver],
-    ["http://192.168.20.1/", publicResolver],
+    ["http://192.168.1.1/", publicResolver],
     ["http://[::1]/", publicResolver],
-    ["http://[::ffff:192.168.20.1]/", publicResolver],
+    ["http://[::ffff:192.168.1.1]/", publicResolver],
     ["http://169.254.169.254/latest/meta-data/", publicResolver],
-    ["http://router.example.com/", async () => ["192.168.20.1"]],
+    ["http://router.example.com/", async () => ["192.168.1.1"]],
     ["http://mixed.example.com/", async () => ["93.184.216.34", "10.0.0.5"]],
     ["http://nowhere.invalid/", async () => { throw new Error("ENOTFOUND"); }],
     ["not a url", publicResolver],
@@ -74,7 +74,7 @@ function fakeFetch(routes) {
 
 test("safeFetch: a redirect from a public page to an internal address is refused before it is fetched", async () => {
   const { impl, calls } = fakeFetch({
-    "https://www.example.com/": { status: 302, headers: { location: "http://192.168.20.1/admin" } },
+    "https://www.example.com/": { status: 302, headers: { location: "http://192.168.1.1/admin" } },
   });
   await assert.rejects(
     safeFetch("https://www.example.com/", { timeoutMs: 1000, resolve: publicResolver, fetchImpl: impl }),
