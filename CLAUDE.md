@@ -6,7 +6,8 @@ MCP-Server für die Google Search Console API (Search Analytics, URL Inspection,
 ## Aufbau
 - Einstieg: `src/index.ts` — `McpServer`, alle Tools per `server.registerTool()`; `node dist/index.js setup` startet den OAuth-Einrichtungsassistenten (`src/setup.ts`)
 - Tool-Logik: je Tool eine Datei in `src/tools/`
-- `src/auth.ts` (Service Account / OAuth, `getConfig()`), `src/oauth.ts`, `src/analytics.ts` (Search-Analytics-Abfragen), `src/inspection.ts`, `src/guardrails.ts` (`GUARDRAIL_SUFFIX`, `VISUAL_SUFFIX`, `withMeta()`)
+- `src/auth.ts` (Service Account / OAuth, `getConfig()`), `src/oauth.ts`, `src/analytics.ts` (Search-Analytics-Abfragen), `src/inspection.ts`, `src/guardrails.ts` (`GUARDRAIL_SUFFIX`, `VISUAL_SUFFIX`, `POSITION_CAVEAT`, `withMeta()`), `src/tool-hints.ts` (`TOOL_HINTS`, `VISUAL_TOOLS`, `POSITION_TOOLS`, `describe()`)
+- **Beschreibungen (seit 2026-11-05):** jede beginnt mit einer Zeile „Typische Fragen" (deutsch, mit englischen Stichworten), danach die Funktion. Die Verhaltensregeln (keine Spekulation, Darstellung, Positions-Hinweis) stehen nicht mehr in der Beschreibung, sondern kommen über `withMeta()` in `_meta.note`, `_meta.presentation` und `_meta.position` jeder Antwort. Grund: kürzere Beschreibungen (Mittel 1.170 → 400 Zeichen) und bessere Treffer der Werkzeugsuche im LiteLLM-Gateway (Messung: 18 → 21 von 24 Testanfragen unter den ersten drei)
 - Herkunft/Git:
   - Remotes: `origin` = `david-wulf/gsc-mcp`, `upstream` und `sug` = beide Suganthan (doppelt), dazu ein privater Spiegel (`git remote -v`)
   - Eigene Anpassungen: Tools `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`; Dimension-Guard; device/country-Filter; eigene Klickkurve statt Studientabelle; `GSC_SERVICE_ACCOUNT_JSON` aus dem Secret-Manager; vollständige `inspect_url`-Felder; SDK 1.32.1 + `registerTool`; `site_url` pro Aufruf auf allen Property-Tools (Wrapper um `registerTool` in `index.ts` + `withSiteUrl()`/`AsyncLocalStorage` in `auth.ts`); `start_date`/`end_date` auf `advanced_search_analytics` und `query_count` (`resolveDateRange()` in `analytics.ts`), Paginierung per `start_row` mit `totalRows`/`hasMore`/`nextStartRow` und `data_state` auf `advanced_search_analytics` (`sortAndPage()`)
@@ -34,7 +35,7 @@ npm start            # node dist/index.js
 
 ## Neues Tool hinzufügen
 1. `src/tools/<name>.ts` mit exportierter async-Funktion; Abfragen über `src/analytics.ts`, Auth über `auth.ts`
-2. In `src/index.ts` `server.registerTool("<name>", { description: "…" + GUARDRAIL_SUFFIX (+ VISUAL_SUFFIX), inputSchema: { … zod … } }, async (args) => …)`; Ergebnis per `withMeta()` als JSON-Text (Muster: `query_count`)
+2. In `src/index.ts` `server.registerTool("<name>", { description: describe("<name>", "…"), inputSchema: { … zod … } }, async (args) => …)`; den Suchhinweis („Typische Fragen: …") in `src/tool-hints.ts` unter `TOOL_HINTS` eintragen (`describe()` wirft sonst beim Start), bei Bedarf den Namen in `VISUAL_TOOLS`/`POSITION_TOOLS`; Ergebnis per `withMeta()` als JSON-Text (Muster: `query_count`)
    `site_url` nicht selbst ins Schema schreiben — der Wrapper ergänzt ihn; Tools ohne Property-Bezug in `NO_PROPERTY_TOOLS` eintragen. Die Property immer über `getConfig().siteUrl` lesen, nie direkt aus `process.env`, und nie als Parameter durch Tool-Funktionen oder `fetchAllRows` reichen; für mehrere Properties in einem Aufruf `withSiteUrl()` (Muster: `multi-site-dashboard.ts`).
 3. README-Tabelle „Only in this fork" und Tool-Zahl in `package.json`-`description` anpassen, `npm run build`
 

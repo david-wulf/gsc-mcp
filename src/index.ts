@@ -4,7 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { GUARDRAIL_SUFFIX, VISUAL_SUFFIX, POSITION_CAVEAT, withMeta } from "./guardrails.js";
+import { withMeta } from "./guardrails.js";
+import { describe } from "./tool-hints.js";
 import { withSiteUrl } from "./auth.js";
 import { quickWins } from "./tools/quick-wins.js";
 import { ctrOpportunities } from "./tools/ctr-opportunities.js";
@@ -91,7 +92,7 @@ const isoDateParam = (note: string) =>
 server.registerTool(
   "quick_wins",
   {
-    description: "Find keywords you're almost ranking for that could be pushed to page one. Returns queries at positions 4-15 with high impressions, sorted by traffic opportunity." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("quick_wins", "Find keywords you're almost ranking for that could be pushed to page one. Returns queries at positions 4-15 with high impressions, sorted by traffic opportunity."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days to analyse"),
         min_impressions: z.number().default(100).describe("Minimum impressions threshold"),
@@ -114,7 +115,7 @@ server.registerTool(
 server.registerTool(
   "ctr_opportunities",
   {
-    description: "Find pages with high impressions but CTR significantly below expected for their position. These are title/meta description optimisation candidates." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("ctr_opportunities", "Find pages with high impressions but CTR significantly below expected for their position. These are title/meta description optimisation candidates."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days to analyse"),
         min_impressions: z.number().default(500).describe("Minimum impressions threshold"),
@@ -136,7 +137,7 @@ server.registerTool(
 server.registerTool(
   "traffic_drops",
   {
-    description: "Find pages that lost the most traffic recently. Compares current period vs prior period and diagnoses whether each drop is a ranking loss, CTR collapse, or demand decline." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("traffic_drops", "Find pages that lost the most traffic recently. Compares current period vs prior period and diagnoses whether each drop is a ranking loss, CTR collapse, or demand decline."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days per period to compare"),
         surface: surfaceParam("Surface to query: web (default), image, video, news, discover. Discover is page-based and supported."),
@@ -155,7 +156,7 @@ server.registerTool(
 server.registerTool(
   "content_gaps",
   {
-    description: "Find topics you should create content for. Returns queries where you get impressions but rank beyond position 20, meaning there is search demand but no real content targeting it." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("content_gaps", "Find topics you should create content for. Returns queries where you get impressions but rank beyond position 20, meaning there is search demand but no real content targeting it."),
     inputSchema: {
         days: z.number().default(90).describe("Number of days to analyse"),
         min_impressions: z.number().default(50).describe("Minimum impressions threshold"),
@@ -176,7 +177,7 @@ server.registerTool(
 server.registerTool(
   "site_snapshot",
   {
-    description: "Get a quick overview of how the site is performing. Returns total clicks, impressions, CTR, and position with a comparison to the prior period." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("site_snapshot", "Get a quick overview of how the site is performing. Returns total clicks, impressions, CTR, and position with a comparison to the prior period."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days per period"),
       },
@@ -194,7 +195,7 @@ server.registerTool(
 server.registerTool(
   "inspect_url",
   {
-    description: "Check if a URL is indexed and why or why not. Returns everything the URL Inspection API reports: verdict, coverage state, last crawl date, crawled as (mobile/desktop), Google vs. declared canonical, robots/noindex, page fetch state, sitemaps and referring URLs Google knows, detected rich results with issues, AMP status and a link to the report in Search Console. Set include_raw for the unmodified API response. Quota: 2,000 inspections per day and 600 per minute per property." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: describe("inspect_url", "Check if a URL is indexed and why or why not. Returns everything the URL Inspection API reports: verdict, coverage state, last crawl date, crawled as (mobile/desktop), Google vs. declared canonical, robots/noindex, page fetch state, sitemaps and referring URLs Google knows, detected rich results with issues, AMP status and a link to the report in Search Console. Set include_raw for the unmodified API response. Quota: 2,000 inspections per day and 600 per minute per property."),
     inputSchema: {
         url: z.string().describe("The full URL to inspect"),
         include_raw: z.boolean().optional().describe("Also return the unmodified inspectionResult from the API (default false)"),
@@ -213,7 +214,7 @@ server.registerTool(
 server.registerTool(
   "cannibalization_check",
   {
-    description: "Find keywords where multiple pages from your site compete against each other. Shows which page ranks higher, the position gap, and combined impressions being split." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("cannibalization_check", "Find keywords where multiple pages from your site compete against each other. Shows which page ranks higher, the position gap, and combined impressions being split."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days to analyse"),
         min_impressions: z.number().default(50).describe("Minimum combined impressions for a query"),
@@ -233,7 +234,7 @@ server.registerTool(
 server.registerTool(
   "content_decay",
   {
-    description: "Find pages that are slowly dying with consistent traffic decline over three consecutive 30-day periods. One bad month is noise; three consecutive bad months is a problem." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("content_decay", "Find pages that are slowly dying with consistent traffic decline over three consecutive 30-day periods. One bad month is noise; three consecutive bad months is a problem."),
     inputSchema: {
         surface: surfaceParam("Surface to query: web (default), image, video, news, discover. Discover is page-based and supported."),
         device: z.enum(["MOBILE", "DESKTOP", "TABLET"]).optional().describe("Restrict to one device. Omit for all devices, which is the default. Not available on Discover, which carries no device dimension."),
@@ -253,7 +254,7 @@ server.registerTool(
 server.registerTool(
   "topic_cluster_performance",
   {
-    description: "See how a group of pages performs as a whole. Aggregates clicks, impressions, CTR, and position for all pages matching a URL path pattern, plus top 5 pages and queries." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("topic_cluster_performance", "See how a group of pages performs as a whole. Aggregates clicks, impressions, CTR, and position for all pages matching a URL path pattern, plus top 5 pages and queries."),
     inputSchema: {
         path_pattern: z.string().describe("URL path pattern to match (e.g. /blog/seo)"),
         days: z.number().default(28).describe("Number of days to analyse"),
@@ -273,7 +274,7 @@ server.registerTool(
 server.registerTool(
   "ctr_vs_benchmark",
   {
-    description: "Compare your actual CTR per page against industry benchmarks by position. Flags pages significantly underperforming for their ranking position." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("ctr_vs_benchmark", "Compare your actual CTR per page against industry benchmarks by position. Flags pages significantly underperforming for their ranking position."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days to analyse"),
         min_impressions: z.number().default(200).describe("Minimum impressions threshold"),
@@ -293,7 +294,7 @@ server.registerTool(
 server.registerTool(
   "verify_claim",
   {
-    description: "Verify a specific numeric claim against live GSC data. Use this to self-check your analysis before presenting findings. Pass the claim text, the metric to check, the expected value, and optionally a URL or query to filter by. Returns whether the claim is verified and any discrepancy found.",
+    description: describe("verify_claim", "Verify a specific numeric claim against live GSC data. Use this to self-check your analysis before presenting findings. Pass the claim text, the metric to check, the expected value, and optionally a URL or query to filter by. Returns whether the claim is verified and any discrepancy found."),
     inputSchema: {
         claim: z.string().describe("The claim to verify, e.g. 'Homepage gets 500 clicks per month'"),
         metric: z.enum(["clicks", "impressions", "ctr", "position"]).describe("Which metric to check"),
@@ -316,7 +317,7 @@ server.registerTool(
 server.registerTool(
   "advanced_search_analytics",
   {
-    description: "Run a custom search analytics query with flexible dimensions and filters. Supports country, device, query, and page filtering, plus search type (web/image/video/news/discover/googleNews). For power users who need specific data cuts. Use start_date/end_date for an exact window such as a calendar month (they replace days). Returns at most 500 rows per call, sorted by order_by; the response carries totalRows, hasMore and nextStartRow, so a longer list is read page by page by calling again with start_row = nextStartRow." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("advanced_search_analytics", "Run a custom search analytics query with flexible dimensions and filters. Supports country, device, query, and page filtering, plus search type (web/image/video/news/discover/googleNews). For power users who need specific data cuts. Use start_date/end_date for an exact window such as a calendar month (they replace days). Returns at most 500 rows per call, sorted by order_by; the response carries totalRows, hasMore and nextStartRow, so a longer list is read page by page by calling again with start_row = nextStartRow."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days to analyse, ending yesterday. Ignored when start_date/end_date are given."),
         start_date: isoDateParam("First day of the window, YYYY-MM-DD (inclusive). Give together with end_date; replaces days. Example: 2026-10-01"),
@@ -360,7 +361,7 @@ server.registerTool(
 server.registerTool(
   "check_alerts",
   {
-    description: "Check for SEO alerts: position drops, CTR collapses, click losses, and pages that disappeared from search results. Returns severity-rated alerts so you know what needs attention first." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("check_alerts", "Check for SEO alerts: position drops, CTR collapses, click losses, and pages that disappeared from search results. Returns severity-rated alerts so you know what needs attention first."),
     inputSchema: {
         days: z.number().default(7).describe("Number of days per period to compare"),
         position_drop_threshold: z.number().default(20).describe("Alert if position drops more than this many spots"),
@@ -382,7 +383,7 @@ server.registerTool(
 server.registerTool(
   "content_recommendations",
   {
-    description: "Get actionable content recommendations by cross-referencing quick wins, content gaps, and cannibalisation data. Returns prioritised actions: pages to update, content to create, and pages to consolidate." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: describe("content_recommendations", "Get actionable content recommendations by cross-referencing quick wins, content gaps, and cannibalisation data. Returns prioritised actions: pages to update, content to create, and pages to consolidate."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days to analyse"),
         max_recommendations: z.number().default(10).describe("Maximum number of recommendations"),
@@ -401,7 +402,7 @@ server.registerTool(
 server.registerTool(
   "generate_report",
   {
-    description: "Generate a comprehensive markdown performance report. Covers site snapshot, alerts, quick wins, traffic drops, content decay, and recommendations. Saves to disk for weekly reviews or scheduled reporting." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: describe("generate_report", "Generate a comprehensive markdown performance report. Covers site snapshot, alerts, quick wins, traffic drops, content decay, and recommendations. Saves to disk for weekly reviews or scheduled reporting."),
     inputSchema: {
         output_path: z.string().optional().describe("File name for the report, no folders (default: gsc-report-{date}.md). Saved in GSC_REPORT_DIR or the server's working directory; an existing file is never overwritten."),
         days: z.number().default(28).describe("Number of days to analyse"),
@@ -420,7 +421,7 @@ server.registerTool(
 server.registerTool(
   "multi_site_dashboard",
   {
-    description: "Health check across multiple GSC properties in one view. Shows clicks, impressions, CTR, and position for each site with period comparison and health status. Agency essential." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("multi_site_dashboard", "Health check across multiple GSC properties in one view. Shows clicks, impressions, CTR, and position for each site with period comparison and health status. Agency essential."),
     inputSchema: {
         site_urls: z.array(z.string()).optional().describe("Array of GSC property URLs. Falls back to GSC_SITE_URLS env var."),
         days: z.number().default(28).describe("Number of days per period"),
@@ -439,7 +440,7 @@ server.registerTool(
 server.registerTool(
   "submit_url",
   {
-    description: "Submit a URL to Google's Indexing API to request crawling and indexing. Works for notifying Google of new or updated content. Note: Google officially supports this for JobPosting/BroadcastEvent schema but processes all page types." + GUARDRAIL_SUFFIX,
+    description: describe("submit_url", "Submit a URL to Google's Indexing API to request crawling and indexing. Works for notifying Google of new or updated content. Note: Google officially supports this for JobPosting/BroadcastEvent schema but processes all page types."),
     inputSchema: {
         url: z.string().describe("The full URL to submit for indexing"),
         action: z.enum(["URL_UPDATED", "URL_DELETED"]).default("URL_UPDATED").describe("URL_UPDATED for new/changed content, URL_DELETED for removed pages"),
@@ -457,7 +458,7 @@ server.registerTool(
 server.registerTool(
   "submit_batch",
   {
-    description: "Submit up to 200 URLs to Google's Indexing API in one go. Daily quota is 200 URL notifications. Use for bulk indexing requests after publishing multiple pages or a site-wide update." + GUARDRAIL_SUFFIX,
+    description: describe("submit_batch", "Submit up to 200 URLs to Google's Indexing API in one go. Daily quota is 200 URL notifications. Use for bulk indexing requests after publishing multiple pages or a site-wide update."),
     inputSchema: {
         urls: z.array(z.string()).describe("Array of URLs to submit (max 200)"),
         action: z.enum(["URL_UPDATED", "URL_DELETED"]).default("URL_UPDATED").describe("URL_UPDATED for new/changed content, URL_DELETED for removed pages"),
@@ -475,7 +476,7 @@ server.registerTool(
 server.registerTool(
   "submit_sitemap",
   {
-    description: "Notify Google of a new or updated sitemap. Triggers Google to recrawl the sitemap and discover new pages." + GUARDRAIL_SUFFIX,
+    description: describe("submit_sitemap", "Notify Google of a new or updated sitemap. Triggers Google to recrawl the sitemap and discover new pages."),
     inputSchema: {
         sitemap_url: z.string().optional().describe("Full sitemap URL (defaults to {site_url}/sitemap.xml)"),
       },
@@ -492,7 +493,7 @@ server.registerTool(
 server.registerTool(
   "list_sitemaps",
   {
-    description: "List all sitemaps submitted for the site, with status, errors, warnings, and indexed page counts." + GUARDRAIL_SUFFIX,
+    description: describe("list_sitemaps", "List all sitemaps submitted for the site, with status, errors, warnings, and indexed page counts."),
     inputSchema: {},
   },
   async () => {
@@ -508,7 +509,7 @@ server.registerTool(
 server.registerTool(
   "discover_analysis",
   {
-    description: "Analyse Google Discover performance in isolation (type=discover). Discover is feed-based, not query-based, so this returns top pages, country split and a daily clicks/impressions trend with a prior-period comparison. No query-level data or position exists for Discover." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: describe("discover_analysis", "Analyse Google Discover performance in isolation (type=discover). Discover is feed-based, not query-based, so this returns top pages, country split and a daily clicks/impressions trend with a prior-period comparison. No query-level data or position exists for Discover."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days per period to compare"),
         row_limit: z.number().default(50).describe("Max number of top pages to return"),
@@ -527,7 +528,7 @@ server.registerTool(
 server.registerTool(
   "image_analysis",
   {
-    description: "Analyse Google Image search performance in isolation (type=image). Returns top image queries, top pages and a prior-period comparison. Separate from web search data." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: describe("image_analysis", "Analyse Google Image search performance in isolation (type=image). Returns top image queries, top pages and a prior-period comparison. Separate from web search data."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days per period to compare"),
         row_limit: z.number().default(50).describe("Max number of top queries/pages to return"),
@@ -546,7 +547,7 @@ server.registerTool(
 server.registerTool(
   "search_appearance",
   {
-    description: "Break down performance by search-appearance / rich-result type (the searchAppearance dimension), e.g. MERCHANT_LISTINGS (Händlereinträge), PRODUCT_SNIPPETS, REVIEW_SNIPPET, RECIPE_FEATURE. Without an appearance argument it lists all appearance types with their metrics. Pass an appearance value to drill into the pages or queries driving that specific type." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: describe("search_appearance", "Break down performance by search-appearance / rich-result type (the searchAppearance dimension), e.g. MERCHANT_LISTINGS (Händlereinträge), PRODUCT_SNIPPETS, REVIEW_SNIPPET, RECIPE_FEATURE. Without an appearance argument it lists all appearance types with their metrics. Pass an appearance value to drill into the pages or queries driving that specific type."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days to analyse"),
         appearance: z.string().optional().describe("Appearance type to drill into, e.g. MERCHANT_LISTINGS. Omit for the full breakdown."),
@@ -568,7 +569,7 @@ server.registerTool(
 server.registerTool(
   "query_count",
   {
-    description: "Count how many distinct queries a property, a section or a single URL is visible for, split by position group (1-3, 4-10, 11-20, 21-50, 51+). Scope it with url (one page) or url_contains (a path), turn it into a time series with granularity (day/week/month), and narrow it with min_position/max_position. Also reports the anonymized-click gap: clicks the totals contain but no query row explains, because those queries fall below Google's privacy threshold. The query count is a floor, never the complete keyword set." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: describe("query_count", "Count how many distinct queries a property, a section or a single URL is visible for, split by position group (1-3, 4-10, 11-20, 21-50, 51+). Scope it with url (one page) or url_contains (a path), turn it into a time series with granularity (day/week/month), and narrow it with min_position/max_position. Also reports the anonymized-click gap: clicks the totals contain but no query row explains, because those queries fall below Google's privacy threshold. The query count is a floor, never the complete keyword set."),
     inputSchema: {
         days: z.number().default(28).describe("Number of days to analyse, ending yesterday. Ignored when start_date/end_date are given."),
         start_date: isoDateParam("First day of the window, YYYY-MM-DD (inclusive). Give together with end_date; replaces days. With granularity month and whole months (e.g. 2026-09-01 to 2026-10-31) every bucket is one calendar month."),
@@ -608,7 +609,7 @@ server.registerTool(
 server.registerTool(
   "image_keyword_overview",
   {
-    description: "Top image-search keywords for the site, sorted by impressions, clicks, or position. Filtered to type=image so it returns only what surfaces in Google Images, not web search." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("image_keyword_overview", "Top image-search keywords for the site, sorted by impressions, clicks, or position. Filtered to type=image so it returns only what surfaces in Google Images, not web search."),
     inputSchema: {
         days: z.number().default(90).describe("Number of days to analyse (image search is lower volume, default 90)"),
         min_impressions: z.number().default(50).describe("Minimum impressions threshold"),
@@ -629,7 +630,7 @@ server.registerTool(
 server.registerTool(
   "image_search_quick_wins",
   {
-    description: "Find image-search queries ranking at positions 4-15 with high impressions, sorted by estimated traffic gain if they reach position 3. Uses an image-search CTR baseline calibrated to the lower CTRs typical of Google Images." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("image_search_quick_wins", "Find image-search queries ranking at positions 4-15 with high impressions, sorted by estimated traffic gain if they reach position 3. Uses an image-search CTR baseline calibrated to the lower CTRs typical of Google Images."),
     inputSchema: {
         days: z.number().default(90).describe("Number of days to analyse"),
         min_impressions: z.number().default(500).describe("Minimum impressions threshold"),
@@ -649,7 +650,7 @@ server.registerTool(
 server.registerTool(
   "compare_web_vs_image",
   {
-    description: "For each query, returns side-by-side performance across web and image search. Two GSC API calls joined on query, with an impressions ratio that surfaces where image search carries disproportionate volume relative to web." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("compare_web_vs_image", "For each query, returns side-by-side performance across web and image search. Two GSC API calls joined on query, with an impressions ratio that surfaces where image search carries disproportionate volume relative to web."),
     inputSchema: {
         days: z.number().default(90).describe("Number of days to analyse"),
         min_combined_impressions: z.number().default(100).describe("Minimum combined (web + image) impressions to include the query"),
@@ -669,7 +670,7 @@ server.registerTool(
 server.registerTool(
   "image_pages_overview",
   {
-    description: "Pages on the site ranked by image-search performance. Tells you which pages are actually surfacing in Google Images and which are not. Pairs with image_keyword_overview to map ranking queries back to the pages carrying them." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("image_pages_overview", "Pages on the site ranked by image-search performance. Tells you which pages are actually surfacing in Google Images and which are not. Pairs with image_keyword_overview to map ranking queries back to the pages carrying them."),
     inputSchema: {
         days: z.number().default(90).describe("Number of days to analyse"),
         min_impressions: z.number().default(100).describe("Minimum impressions threshold"),
@@ -690,7 +691,7 @@ server.registerTool(
 server.registerTool(
   "image_keyword_trends",
   {
-    description: "Period-over-period trend for image-search queries. Two equal-length windows joined on query, with impressions and position deltas. Negative position delta means the query improved its average rank." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("image_keyword_trends", "Period-over-period trend for image-search queries. Two equal-length windows joined on query, with impressions and position deltas. Negative position delta means the query improved its average rank."),
     inputSchema: {
         days: z.number().default(28).describe("Length in days of each comparison window (current + prior)"),
         min_combined_impressions: z.number().default(100).describe("Minimum combined impressions across both windows"),
@@ -711,7 +712,7 @@ server.registerTool(
 server.registerTool(
   "image_impressions_no_clicks",
   {
-    description: "Surfaces query and page pairs that earn meaningful image-search impressions but effectively zero clicks. The textbook 'thumbnail is not converting' pattern. Defaults tuned for image search, which runs at much higher impression volumes per page than web." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("image_impressions_no_clicks", "Surfaces query and page pairs that earn meaningful image-search impressions but effectively zero clicks. The textbook 'thumbnail is not converting' pattern. Defaults tuned for image search, which runs at much higher impression volumes per page than web."),
     inputSchema: {
         days: z.number().default(90).describe("Number of days to analyse"),
         min_impressions: z.number().default(500).describe("Minimum impressions threshold"),
@@ -732,7 +733,7 @@ server.registerTool(
 server.registerTool(
   "image_content_decay",
   {
-    description: "Image-search version of content_decay. Three 30-day windows, flags pages with a consistent decline across all three. Defaults to a lower minimum click threshold than the web equivalent because image search produces lower click volumes overall." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("image_content_decay", "Image-search version of content_decay. Three 30-day windows, flags pages with a consistent decline across all three. Defaults to a lower minimum click threshold than the web equivalent because image search produces lower click volumes overall."),
     inputSchema: {
         min_period3_clicks: z.number().default(5).describe("Minimum image-search clicks in the oldest 30-day window required for a page to be considered"),
       },
@@ -750,7 +751,7 @@ server.registerTool(
 server.registerTool(
   "genai_conversation_queries",
   {
-    description: "Surface AI-conversation exhaust hiding in your regular query data: bare replies to Google's AI ('yes', 'go on'), 'what about X' pivot follow-ups, conversational questions, AI-visibility tracker probes, and full agent prompts logged as queries. Google counts every AI Mode follow-up as a new query and folds AI Mode/AI Overviews into the web search type, so these fragments carry real impressions, positions and clicks. The dedicated Generative AI report has no query dimension; this is the only query-level AI evidence available anywhere. Classifies every match into seven buckets with landing pages, plus a monthly timeline showing when reply-artefacts first appeared on your site. Treat probe and harness buckets as machine traffic, not demand." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: describe("genai_conversation_queries", "Surface AI-conversation exhaust hiding in your regular query data: bare replies to Google's AI ('yes', 'go on'), 'what about X' pivot follow-ups, conversational questions, AI-visibility tracker probes, and full agent prompts logged as queries. Google counts every AI Mode follow-up as a new query and folds AI Mode/AI Overviews into the web search type, so these fragments carry real impressions, positions and clicks. The dedicated Generative AI report has no query dimension; this is the only query-level AI evidence available anywhere. Classifies every match into seven buckets with landing pages, plus a monthly timeline showing when reply-artefacts first appeared on your site. Treat probe and harness buckets as machine traffic, not demand."),
     inputSchema: {
         days: z.number().default(480).describe("Days to analyse (default 480, the full 16 months GSC retains)"),
         min_impressions: z.number().default(1).describe("Minimum impressions for a query to be listed (single-impression rows are evidence, not noise, so the default keeps them)"),
@@ -771,7 +772,7 @@ server.registerTool(
 server.registerTool(
   "image_page_audit",
   {
-    description: "Fetches pages from YOUR OWN site and audits every image on them for the on-page factors that drive image-search performance: missing/empty/generic/duplicate alt text, non-descriptive filenames, missing width/height attributes, lazy loading on the LCP candidate, srcset coverage, file format and weight, intrinsic dimensions vs Google's ~250x200 indexing minimum, ImageObject and licensable schema, max-image-preview, inline background images, and the metadata inside the image files (camera EXIF and GPS that should be stripped, IPTC Creator/Copyright/Caption that should survive, XMP DigitalSourceType on AI-generated images). Feed it URLs straight from image_impressions_no_clicks or image_search_quick_wins to turn 'which pages fail' into 'why they fail'. Only fetches the URLs given; no third-party service involved. Returns a per-image findings table, page-level checks, and an ordered top_fixes list." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+    description: describe("image_page_audit", "Fetches pages from YOUR OWN site and audits every image on them for the on-page factors that drive image-search performance: missing/empty/generic/duplicate alt text, non-descriptive filenames, missing width/height attributes, lazy loading on the LCP candidate, srcset coverage, file format and weight, intrinsic dimensions vs Google's ~250x200 indexing minimum, ImageObject and licensable schema, max-image-preview, inline background images, and the metadata inside the image files (camera EXIF and GPS that should be stripped, IPTC Creator/Copyright/Caption that should survive, XMP DigitalSourceType on AI-generated images). Feed it URLs straight from image_impressions_no_clicks or image_search_quick_wins to turn 'which pages fail' into 'why they fail'. Only fetches the URLs given; no third-party service involved. Returns a per-image findings table, page-level checks, and an ordered top_fixes list."),
     inputSchema: {
         urls: z.array(z.string()).min(1).max(5).describe("Page URLs to audit (1-5, from your own site)"),
         fetch_metadata: z.boolean().default(true).describe("Also read EXIF/IPTC/XMP metadata from the image files"),

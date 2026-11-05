@@ -9,6 +9,7 @@
  */
 
 import { currentSiteUrl } from "./auth.js";
+import { VISUAL_TOOLS, POSITION_TOOLS } from "./tool-hints.js";
 
 export const GUARDRAIL_SUFFIX =
   " IMPORTANT: Base your analysis ONLY on the data returned. Report exact numbers from the results. Do not speculate about causes (e.g. algorithm updates, competitor actions) unless the data explicitly supports it. If the data does not contain enough information to answer a question, say so clearly rather than guessing.";
@@ -28,7 +29,7 @@ export function withMeta(
   toolName: string,
   params: Record<string, unknown>,
   source: string = "Google Search Console API (live data)",
-  note: string = "All numbers in this response come directly from the Google Search Console API. They are exact values, not estimates. Base your analysis only on this data. Do not invent or assume additional context."
+  note: string = "All numbers in this response come directly from the Google Search Console API. They are exact values, not estimates. Base your analysis only on this data. Do not invent or assume additional context." + GUARDRAIL_SUFFIX
 ): {
   _meta: {
     source: string;
@@ -36,6 +37,8 @@ export function withMeta(
     site_url: string | undefined;
     parameters: Record<string, unknown>;
     note: string;
+    presentation?: string;
+    position?: string;
   };
   data: unknown;
 } {
@@ -46,6 +49,8 @@ export function withMeta(
       site_url: currentSiteUrl(),
       parameters: params,
       note,
+      ...(VISUAL_TOOLS.has(toolName) ? { presentation: VISUAL_SUFFIX.trim() } : {}),
+      ...(POSITION_TOOLS.has(toolName) ? { position: POSITION_CAVEAT.trim() } : {}),
     },
     data,
   };
