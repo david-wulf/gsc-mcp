@@ -169,6 +169,8 @@ For multiple properties, add `GSC_SITE_URLS`:
 
 You can also point a single call at any property your credentials can see without touching the config: every tool that queries a property takes an optional `site_url` parameter (fork change in v2.7.0 — upstream only offers it on `advanced_search_analytics`, `genai_conversation_queries` and the image-search tools). That covers `quick_wins`, `inspect_url`, `list_sitemaps`, `generate_report` and the rest. Only `submit_url` and `submit_batch` (the Indexing API is URL-based), `image_page_audit` (fetches pages directly) and `multi_site_dashboard` (takes `site_urls`) go without it. Every result names the property it ran against in `_meta.site_url`. "Which pages get image impressions but no clicks on sc-domain:secondsite.com?" just works.
 
+Exact windows and long lists (fork change): `advanced_search_analytics` and `query_count` take an optional `start_date`/`end_date` pair (YYYY-MM-DD, both inclusive) that replaces `days`, so a calendar month is one call instead of "the last N days". `advanced_search_analytics` returns at most 500 rows per call but no longer drops the rest: the response carries `totalRows`, `hasMore` and `nextStartRow`, and calling again with `start_row` reads the next page of the same sorted list (ties are broken on the row keys, so pages never overlap). It also takes `data_state` (`all`, the default, or `final`). Example, the top 1,000 non-brand queries of October: `start_date: 2026-10-01, end_date: 2026-10-31, dimensions: [query], filters: [{dimension: query, operator: excludingRegex, expression: "brand|brnd"}], row_limit: 500`, then the same call with `start_row: 500`.
+
 ## All 33 tools
 
 ### Only in this fork (4)

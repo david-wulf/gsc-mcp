@@ -82,6 +82,11 @@ const SURFACES = ["web", "image", "video", "news", "discover", "googleNews"] as 
 const surfaceParam = (note: string) =>
   z.enum(SURFACES).default("web").describe(note);
 
+// Optional calendar date. Validity (real date, start before end, both given)
+// is checked in resolveDateRange(), which every date-range tool goes through.
+const isoDateParam = (note: string) =>
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").optional().describe(note);
+
 // 1. Quick Wins
 server.registerTool(
   "quick_wins",
@@ -311,24 +316,40 @@ server.registerTool(
 server.registerTool(
   "advanced_search_analytics",
   {
-    description: "Run a custom search analytics query with flexible dimensions and filters. Supports country, device, query, and page filtering, plus search type (web/image/video/news/discover/googleNews). For power users who need specific data cuts." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
+    description: "Run a custom search analytics query with flexible dimensions and filters. Supports country, device, query, and page filtering, plus search type (web/image/video/news/discover/googleNews). For power users who need specific data cuts. Use start_date/end_date for an exact window such as a calendar month (they replace days). Returns at most 500 rows per call, sorted by order_by; the response carries totalRows, hasMore and nextStartRow, so a longer list is read page by page by calling again with start_row = nextStartRow." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX + POSITION_CAVEAT,
     inputSchema: {
-        days: z.number().default(28).describe("Number of days to analyse"),
+        days: z.number().default(28).describe("Number of days to analyse, ending yesterday. Ignored when start_date/end_date are given."),
+        start_date: isoDateParam("First day of the window, YYYY-MM-DD (inclusive). Give together with end_date; replaces days. Example: 2026-10-01"),
+        end_date: isoDateParam("Last day of the window, YYYY-MM-DD (inclusive). Give together with start_date. Example: 2026-10-31"),
         dimensions: z.array(z.string()).default(["query"]).describe("Dimensions to group by: query, page, country, device, date"),
         filters: z.array(z.object({
           dimension: z.string().describe("Dimension to filter: query, page, country, device"),
           operator: z.string().describe("Operator: contains, notContains, equals, notEquals, includingRegex, excludingRegex"),
           expression: z.string().describe("Filter value"),
         })).default([]).describe("Dimension filters to apply"),
-        row_limit: z.number().default(100).describe("Maximum rows to return (max 500)"),
+        row_limit: z.number().default(100).describe("Rows to return in this call (max 500; higher values are lowered to 500)"),
+        start_row: z.number().int().min(0).default(0).describe("Zero-based offset into the sorted result, for paging: 0 for the first page, then the nextStartRow of the previous response"),
         order_by: z.string().default("clicks").describe("Sort by: clicks, impressions, ctr, position"),
         order_direction: z.string().default("descending").describe("Sort direction: ascending, descending"),
+        data_state: z.enum(["all", "final"]).default("all").describe("all (default): includes fresh, not yet final days, matching the GSC dashboard. final: finalised data only."),
         surface: surfaceParam("Surface to query: web (default), image, video, news, discover, googleNews. Dimensions must be valid for the chosen surface."),
       },
   },
-  async ({ days, dimensions, filters, row_limit, order_by, order_direction, surface }) => {
-      const results = await advancedSearchAnalytics(days, dimensions, filters, row_limit, order_by, order_direction, surface);
-      const wrapped = withMeta(results, "advanced_search_analytics", { days, dimensions, filters, row_limit, order_by, surface });
+  async ({ days, start_date, end_date, dimensions, filters, row_limit, start_row, order_by, order_direction, data_state, surface }) => {
+      const results = await advancedSearchAnalytics({
+        days,
+        startDate: start_date,
+        endDate: end_date,
+        dimensions,
+        filters,
+        rowLimit: row_limit,
+        startRow: start_row,
+        orderBy: order_by,
+        orderDirection: order_direction,
+        searchType: surface,
+        dataState: data_state,
+      });
+      const wrapped = withMeta(results, "advanced_search_analytics", { days, start_date, end_date, dimensions, filters, row_limit, start_row, order_by, order_direction, data_state, surface });
       return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
       };
@@ -549,7 +570,9 @@ server.registerTool(
   {
     description: "Count how many distinct queries a property, a section or a single URL is visible for, split by position group (1-3, 4-10, 11-20, 21-50, 51+). Scope it with url (one page) or url_contains (a path), turn it into a time series with granularity (day/week/month), and narrow it with min_position/max_position. Also reports the anonymized-click gap: clicks the totals contain but no query row explains, because those queries fall below Google's privacy threshold. The query count is a floor, never the complete keyword set." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
     inputSchema: {
-        days: z.number().default(28).describe("Number of days to analyse"),
+        days: z.number().default(28).describe("Number of days to analyse, ending yesterday. Ignored when start_date/end_date are given."),
+        start_date: isoDateParam("First day of the window, YYYY-MM-DD (inclusive). Give together with end_date; replaces days. With granularity month and whole months (e.g. 2026-09-01 to 2026-10-31) every bucket is one calendar month."),
+        end_date: isoDateParam("Last day of the window, YYYY-MM-DD (inclusive). Give together with start_date. compare_previous then counts the preceding window of the same length in days, not the previous calendar month."),
         url: z.string().optional().describe("Count only queries for this exact URL"),
         url_contains: z.string().optional().describe("Count only queries for URLs containing this string, e.g. /ratgeber/"),
         granularity: z.enum(["none", "day", "week", "month"]).default("none").describe("Return a time series of query counts. One API request per bucket, so day-level is capped at 90 days."),
@@ -563,9 +586,9 @@ server.registerTool(
         country: z.string().optional().describe("Restrict to one country as an ISO-3166-1 alpha-3 code, e.g. deu, aut, che. Omit for all countries, which is the default."),
       },
   },
-  async ({ days, url, url_contains, granularity, min_position, max_position, compare_previous, include_pages, top_pages, surface, device, country }) => {
-      const results = await queryCount(days, compare_previous, include_pages, top_pages, surface, url, url_contains, granularity, min_position, max_position, device, country);
-      const wrapped = withMeta(results, "query_count", { days, url, url_contains, granularity, min_position, max_position, compare_previous, include_pages, top_pages, surface, device, country });
+  async ({ days, start_date, end_date, url, url_contains, granularity, min_position, max_position, compare_previous, include_pages, top_pages, surface, device, country }) => {
+      const results = await queryCount(days, compare_previous, include_pages, top_pages, surface, url, url_contains, granularity, min_position, max_position, device, country, start_date, end_date);
+      const wrapped = withMeta(results, "query_count", { days, start_date, end_date, url, url_contains, granularity, min_position, max_position, compare_previous, include_pages, top_pages, surface, device, country });
       return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
       };

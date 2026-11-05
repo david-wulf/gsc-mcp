@@ -52,7 +52,14 @@ export interface QueryParams {
    * tools (the image suite, genai) merge without touching their call sites.
    */
   type?: SearchType;
+  /**
+   * "all" (default) includes fresh, not yet finalised days and matches the GSC
+   * dashboard; "final" returns finalised data only.
+   */
+  dataState?: DataState;
 }
+
+export type DataState = "final" | "all";
 
 /**
  * Validates that the requested dimensions are legal for the chosen surface.
@@ -217,6 +224,71 @@ export function getDateRange(days: number): { startDate: string; endDate: string
   };
 }
 
+export interface DateRange {
+  startDate: string;
+  endDate: string;
+  /** Inclusive length of the range in days. */
+  days: number;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseIsoDate(value: string, label: string): Date {
+  if (!ISO_DATE.test(value)) {
+    throw new Error(`${label} must be a date in YYYY-MM-DD format, got "${value}".`);
+  }
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  // Date.UTC silently rolls 2026-02-30 over to March; reject that instead.
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) {
+    throw new Error(`${label} "${value}" is not a valid calendar date.`);
+  }
+  return date;
+}
+
+/**
+ * Resolves the reporting window of a tool call. An explicit start_date/end_date
+ * pair (YYYY-MM-DD, both inclusive) wins over `days`, so a calendar month can be
+ * queried exactly; without it the window is the last `days` days ending
+ * yesterday, as before. Both dates must be given together.
+ */
+export function resolveDateRange(days: number, startDate?: string, endDate?: string): DateRange {
+  const hasStart = startDate !== undefined && startDate !== "";
+  const hasEnd = endDate !== undefined && endDate !== "";
+  if (hasStart !== hasEnd) {
+    throw new Error(
+      "start_date and end_date must be given together (YYYY-MM-DD, both inclusive). " +
+        "Omit both to use days instead."
+    );
+  }
+  if (!hasStart) {
+    return { ...getDateRange(days), days };
+  }
+  const start = parseIsoDate(startDate!, "start_date");
+  const end = parseIsoDate(endDate!, "end_date");
+  if (start > end) {
+    throw new Error(`start_date ${startDate} lies after end_date ${endDate}.`);
+  }
+  return {
+    startDate: startDate!,
+    endDate: endDate!,
+    days: Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1,
+  };
+}
+
+/** The range of the same length that ends the day before `range` starts. */
+export function precedingDateRange(range: DateRange): DateRange {
+  const start = parseIsoDate(range.startDate, "startDate");
+  const priorEnd = new Date(start.getTime() - DAY_MS);
+  const priorStart = new Date(priorEnd.getTime() - (range.days - 1) * DAY_MS);
+  return {
+    startDate: priorStart.toISOString().split("T")[0],
+    endDate: priorEnd.toISOString().split("T")[0],
+    days: range.days,
+  };
+}
+
 export function getPriorDateRange(days: number): { startDate: string; endDate: string } {
   const currentEnd = new Date();
   currentEnd.setDate(currentEnd.getDate() - 1);
@@ -258,7 +330,7 @@ export async function fetchAllRows(params: QueryParams): Promise<SearchAnalytics
         dimensionFilterGroups: params.dimensionFilterGroups,
         rowLimit: pageSize,
         startRow,
-        dataState: "all",
+        dataState: params.dataState ?? "all",
       },
     });
 

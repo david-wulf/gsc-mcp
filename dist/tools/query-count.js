@@ -47,13 +47,16 @@ function buildBuckets(startDate, endDate, granularity) {
     }
     return out;
 }
-async function queryCount(days = 28, comparePrevious = true, includePages = false, topPages = 25, surface = "web", url, urlContains, granularity = "none", minPosition, maxPosition, device, country) {
+async function queryCount(days = 28, comparePrevious = true, includePages = false, topPages = 25, surface = "web", url, urlContains, granularity = "none", minPosition, maxPosition, device, country, requestedStart, requestedEnd) {
     (0, analytics_js_1.assertValidDimensions)(surface, ["query"]);
-    if (granularity === "day" && days > 90) {
-        throw new Error(`granularity "day" over ${days} days would need ${days}+ API requests. ` +
+    // An explicit start/end pair replaces days, so month buckets can line up
+    // with whole calendar months instead of a window ending yesterday.
+    const period = (0, analytics_js_1.resolveDateRange)(days, requestedStart, requestedEnd);
+    const { startDate, endDate } = period;
+    if (granularity === "day" && period.days > 90) {
+        throw new Error(`granularity "day" over ${period.days} days would need ${period.days}+ API requests. ` +
             `Use "week" or "month" for ranges beyond 90 days.`);
     }
-    const { startDate, endDate } = (0, analytics_js_1.getDateRange)(days);
     const pageFilters = [];
     if (url)
         pageFilters.push({ dimension: "page", operator: "equals", expression: url });
@@ -123,7 +126,7 @@ async function queryCount(days = 28, comparePrevious = true, includePages = fals
     }
     let previousPeriod = null;
     if (comparePrevious) {
-        const prior = (0, analytics_js_1.getPriorDateRange)(days);
+        const prior = (0, analytics_js_1.precedingDateRange)(period);
         const priorRows = await (0, analytics_js_1.fetchAllRows)(scoped({
             startDate: prior.startDate,
             endDate: prior.endDate,
@@ -167,7 +170,7 @@ async function queryCount(days = 28, comparePrevious = true, includePages = fals
             .slice(0, topPages);
     }
     return {
-        period: { startDate, endDate, days },
+        period: { startDate, endDate, days: period.days },
         scope: {
             url: url ?? null,
             urlContains: urlContains ?? null,

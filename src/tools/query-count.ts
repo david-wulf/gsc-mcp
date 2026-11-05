@@ -1,7 +1,7 @@
 import {
   fetchAllRows,
-  getDateRange,
-  getPriorDateRange,
+  resolveDateRange,
+  precedingDateRange,
   SearchType,
   assertValidDimensions,
   QueryParams,
@@ -142,18 +142,23 @@ export async function queryCount(
   minPosition?: number,
   maxPosition?: number,
   device?: string,
-  country?: string
+  country?: string,
+  requestedStart?: string,
+  requestedEnd?: string
 ): Promise<QueryCountResult> {
   assertValidDimensions(surface, ["query"]);
 
-  if (granularity === "day" && days > 90) {
+  // An explicit start/end pair replaces days, so month buckets can line up
+  // with whole calendar months instead of a window ending yesterday.
+  const period = resolveDateRange(days, requestedStart, requestedEnd);
+  const { startDate, endDate } = period;
+
+  if (granularity === "day" && period.days > 90) {
     throw new Error(
-      `granularity "day" over ${days} days would need ${days}+ API requests. ` +
+      `granularity "day" over ${period.days} days would need ${period.days}+ API requests. ` +
         `Use "week" or "month" for ranges beyond 90 days.`
     );
   }
-
-  const { startDate, endDate } = getDateRange(days);
 
   const pageFilters = [];
   if (url) pageFilters.push({ dimension: "page", operator: "equals", expression: url });
@@ -240,7 +245,7 @@ export async function queryCount(
 
   let previousPeriod: QueryCountResult["previousPeriod"] = null;
   if (comparePrevious) {
-    const prior = getPriorDateRange(days);
+    const prior = precedingDateRange(period);
     const priorRows = await fetchAllRows(
       scoped({
         startDate: prior.startDate,
@@ -293,7 +298,7 @@ export async function queryCount(
   }
 
   return {
-    period: { startDate, endDate, days },
+    period: { startDate, endDate, days: period.days },
     scope: {
       url: url ?? null,
       urlContains: urlContains ?? null,

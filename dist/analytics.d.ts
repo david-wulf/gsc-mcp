@@ -39,7 +39,13 @@ export interface QueryParams {
      * tools (the image suite, genai) merge without touching their call sites.
      */
     type?: SearchType;
+    /**
+     * "all" (default) includes fresh, not yet finalised days and matches the GSC
+     * dashboard; "final" returns finalised data only.
+     */
+    dataState?: DataState;
 }
+export type DataState = "final" | "all";
 /**
  * Validates that the requested dimensions are legal for the chosen surface.
  * Throws a descriptive error instead of letting the API return a generic 400.
@@ -104,6 +110,21 @@ export declare function getDateRange(days: number): {
     startDate: string;
     endDate: string;
 };
+export interface DateRange {
+    startDate: string;
+    endDate: string;
+    /** Inclusive length of the range in days. */
+    days: number;
+}
+/**
+ * Resolves the reporting window of a tool call. An explicit start_date/end_date
+ * pair (YYYY-MM-DD, both inclusive) wins over `days`, so a calendar month can be
+ * queried exactly; without it the window is the last `days` days ending
+ * yesterday, as before. Both dates must be given together.
+ */
+export declare function resolveDateRange(days: number, startDate?: string, endDate?: string): DateRange;
+/** The range of the same length that ends the day before `range` starts. */
+export declare function precedingDateRange(range: DateRange): DateRange;
 export declare function getPriorDateRange(days: number): {
     startDate: string;
     endDate: string;

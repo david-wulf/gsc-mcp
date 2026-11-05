@@ -9,7 +9,7 @@ MCP-Server für die Google Search Console API (Search Analytics, URL Inspection,
 - `src/auth.ts` (Service Account / OAuth, `getConfig()`), `src/oauth.ts`, `src/analytics.ts` (Search-Analytics-Abfragen), `src/inspection.ts`, `src/guardrails.ts` (`GUARDRAIL_SUFFIX`, `VISUAL_SUFFIX`, `withMeta()`)
 - Herkunft/Git:
   - Remotes: `origin` = `david-wulf/gsc-mcp`, `upstream` und `sug` = beide Suganthan (doppelt), dazu ein privater Spiegel (`git remote -v`)
-  - Eigene Anpassungen: Tools `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`; Dimension-Guard; device/country-Filter; eigene Klickkurve statt Studientabelle; `GSC_SERVICE_ACCOUNT_JSON` aus dem Secret-Manager; vollständige `inspect_url`-Felder; SDK 1.32.1 + `registerTool`; `site_url` pro Aufruf auf allen Property-Tools (Wrapper um `registerTool` in `index.ts` + `withSiteUrl()`/`AsyncLocalStorage` in `auth.ts`)
+  - Eigene Anpassungen: Tools `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`; Dimension-Guard; device/country-Filter; eigene Klickkurve statt Studientabelle; `GSC_SERVICE_ACCOUNT_JSON` aus dem Secret-Manager; vollständige `inspect_url`-Felder; SDK 1.32.1 + `registerTool`; `site_url` pro Aufruf auf allen Property-Tools (Wrapper um `registerTool` in `index.ts` + `withSiteUrl()`/`AsyncLocalStorage` in `auth.ts`); `start_date`/`end_date` auf `advanced_search_analytics` und `query_count` (`resolveDateRange()` in `analytics.ts`), Paginierung per `start_row` mit `totalRows`/`hasMore`/`nextStartRow` und `data_state` auf `advanced_search_analytics` (`sortAndPage()`)
   - Upstream ziehen: `git fetch upstream && git merge upstream/main` (Muster: `0e331e5` „Merge upstream v2.5.1 into the fork"), danach README-Fork-Hinweis und `package.json`-Version nachziehen. Beiträge an Upstream laufen als PR von `david-wulf` (vgl. Merge PR #1)
 
 ## Tools
@@ -22,7 +22,7 @@ npm install
 npm run build        # tsc -> dist/
 npm start            # node dist/index.js
 ```
-`npm test` (baut und startet `test/hardening.test.mjs` mit `node:test`, offline: Fetch-Schutz von `image_page_audit`, Dateinamen-Grenze von `generate_report`); sonst kein Lint, `npm run build` ist die Typprüfung. Nachweise einzelner Fixes liegen unter `docs/verification/`.
+`npm test` (baut und startet `test/hardening.test.mjs` mit `node:test`, offline: Fetch-Schutz von `image_page_audit`, Dateinamen-Grenze von `generate_report`; dazu `test/date-range-paging.test.mjs`: Datumsauflösung und lückenloses Paging); sonst kein Lint, `npm run build` ist die Typprüfung. Nachweise einzelner Fixes liegen unter `docs/verification/`.
 
 ## Einbindung in Claude
 - `~/.claude.json`: `gsc` (über `infisical-run.mjs … -- node …\Suganthans-GSC-MCP\dist\index.js`), `gsc-mb24` (direkt `node …/dist/index.js`)

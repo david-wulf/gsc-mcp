@@ -73,5 +73,5 @@ interface QueryCountResult {
     topPagesByQueryCount: PageQueryCount[] | null;
     comparabilityWarning: string | null;
 }
-export declare function queryCount(days?: number, comparePrevious?: boolean, includePages?: boolean, topPages?: number, surface?: SearchType, url?: string, urlContains?: string, granularity?: Granularity, minPosition?: number, maxPosition?: number, device?: string, country?: string): Promise<QueryCountResult>;
+export declare function queryCount(days?: number, comparePrevious?: boolean, includePages?: boolean, topPages?: number, surface?: SearchType, url?: string, urlContains?: string, granularity?: Granularity, minPosition?: number, maxPosition?: number, device?: string, country?: string, requestedStart?: string, requestedEnd?: string): Promise<QueryCountResult>;
 export {};
