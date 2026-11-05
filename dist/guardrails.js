@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.POSITION_CAVEAT = exports.VISUAL_SUFFIX = exports.GUARDRAIL_SUFFIX = void 0;
 exports.withMeta = withMeta;
 const auth_js_1 = require("./auth.js");
+const tool_hints_js_1 = require("./tool-hints.js");
 exports.GUARDRAIL_SUFFIX = " IMPORTANT: Base your analysis ONLY on the data returned. Report exact numbers from the results. Do not speculate about causes (e.g. algorithm updates, competitor actions) unless the data explicitly supports it. If the data does not contain enough information to answer a question, say so clearly rather than guessing.";
 exports.VISUAL_SUFFIX = " PRESENTATION: Always present these results as a rich, interactive visualization using artifacts. Use summary cards for key metrics, colour-coded indicators for severity or change direction (green for positive, red for negative), bar charts or sparklines for comparisons, and tabbed sections to organise different categories of results. Make the output visually scannable and dashboard-like rather than plain text or raw tables.";
 exports.POSITION_CAVEAT = " POSITION: position is an impression-weighted average over real impressions, blended across queries, devices and countries. It is not a rank-tracker rank. Deep positions are only recorded when a user actually reaches that part of the results, so values beyond page one rest on sparse data. Treat absolute positions as directional and prefer position deltas between periods when judging change.";
@@ -19,7 +20,7 @@ exports.POSITION_CAVEAT = " POSITION: position is an impression-weighted average
  * Wraps tool results with a _meta provenance field so Claude
  * knows the data source and is anchored to the actual numbers.
  */
-function withMeta(data, toolName, params, source = "Google Search Console API (live data)", note = "All numbers in this response come directly from the Google Search Console API. They are exact values, not estimates. Base your analysis only on this data. Do not invent or assume additional context.") {
+function withMeta(data, toolName, params, source = "Google Search Console API (live data)", note = "All numbers in this response come directly from the Google Search Console API. They are exact values, not estimates. Base your analysis only on this data. Do not invent or assume additional context." + exports.GUARDRAIL_SUFFIX) {
     return {
         _meta: {
             source,
@@ -27,6 +28,8 @@ function withMeta(data, toolName, params, source = "Google Search Console API (l
             site_url: (0, auth_js_1.currentSiteUrl)(),
             parameters: params,
             note,
+            ...(tool_hints_js_1.VISUAL_TOOLS.has(toolName) ? { presentation: exports.VISUAL_SUFFIX.trim() } : {}),
+            ...(tool_hints_js_1.POSITION_TOOLS.has(toolName) ? { position: exports.POSITION_CAVEAT.trim() } : {}),
         },
         data,
     };

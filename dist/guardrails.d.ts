@@ -21,6 +21,8 @@ export declare function withMeta(data: unknown, toolName: string, params: Record
         site_url: string | undefined;
         parameters: Record<string, unknown>;
         note: string;
+        presentation?: string;
+        position?: string;
     };
     data: unknown;
 };
