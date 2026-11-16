@@ -5,22 +5,53 @@ import { getSearchConsoleClient, getConfig } from "./auth.js";
  * why every legacy tool only ever sees web data. Set this explicitly to query
  * Discover, Image, Video or News surfaces in isolation.
  */
-export type SearchType = "web" | "image" | "video" | "news" | "discover" | "googleNews";
+export type SearchType =
+  | "web"
+  | "image"
+  | "video"
+  | "news"
+  | "discover"
+  | "googleNews"
+  | "webMultimodal";
 
 /**
  * Dimensions the API actually allows per surface. Used for a friendly guard so
  * an invalid combination fails with a clear message instead of an opaque 400.
  * (searchAppearance is special: it must be the ONLY grouping dimension.)
+ *
+ * webMultimodal (API update 2026-11): Google Lens, Circle to Search and image
+ * uploads in Search. brandedClassification (same update) splits query-based
+ * surfaces into BRANDED / NON_BRANDED; Discover and Google News carry no
+ * queries, so they have no brand split either.
  */
 export const ALLOWED_DIMENSIONS: Record<SearchType, string[]> = {
-  web: ["query", "page", "country", "device", "date", "searchAppearance"],
-  image: ["query", "page", "country", "device", "date", "searchAppearance"],
-  video: ["query", "page", "country", "device", "date", "searchAppearance"],
-  news: ["query", "page", "country", "device", "date"],
+  web: ["query", "page", "country", "device", "date", "searchAppearance", "brandedClassification"],
+  image: ["query", "page", "country", "device", "date", "searchAppearance", "brandedClassification"],
+  video: ["query", "page", "country", "device", "date", "searchAppearance", "brandedClassification"],
+  news: ["query", "page", "country", "device", "date", "brandedClassification"],
+  webMultimodal: ["query", "page", "country", "device", "date", "searchAppearance", "brandedClassification"],
   // Discover is not query-based: no "query", no "device".
   discover: ["page", "country", "date", "searchAppearance"],
   googleNews: ["page", "country", "date"],
 };
+
+/**
+ * Branded / non-branded classification (Search Analytics API update, 2026-11).
+ * Google classifies each query itself; the values are BRANDED and NON_BRANDED.
+ * Data exists from this day on, and only for eligible properties (top-level
+ * properties with enough query volume). Other properties get no rows at all —
+ * an empty answer there means "not classified", never "no brand traffic".
+ */
+export const BRANDED_DATA_START = "2026-02-21";
+export const BRANDED_VALUES = ["BRANDED", "NON_BRANDED"] as const;
+export type BrandedValue = (typeof BRANDED_VALUES)[number];
+export type BrandedChoice = "branded" | "non_branded";
+
+export const BRANDED_CAVEAT =
+  `brandedClassification is Google's own classification, available from ${BRANDED_DATA_START} ` +
+  "and only for eligible properties (top-level, enough query volume). Ineligible properties return " +
+  "no rows: zero rows means not classified, not zero brand traffic. Queries hidden for privacy " +
+  "(anonymized) are not in the query rows, so branded + non-branded can be lower than the property total.";
 
 export interface SearchAnalyticsRow {
   keys: string[];
@@ -42,6 +73,11 @@ export interface QueryParams {
       operator: string;
       expression: string;
     }>;
+    /**
+     * Exact-match lists (API update 2026-11): several countries or devices in
+     * one request, e.g. DACH = [deu, aut, che]. Only country and device.
+     */
+    filterLists?: FilterList[];
   }>;
   rowLimit?: number;
   /** Hard cap on rows fetched across all pages. Omit for no cap. */
@@ -60,6 +96,125 @@ export interface QueryParams {
 }
 
 export type DataState = "final" | "all";
+
+export interface DimensionFilter {
+  dimension: string;
+  operator: string;
+  expression: string;
+}
+
+export interface FilterList {
+  dimension: "country" | "device";
+  expressions: string[];
+}
+
+/** Filter for one side of the brand split; undefined means both sides. */
+export function brandedFilter(branded?: BrandedChoice): DimensionFilter[] {
+  if (!branded) return [];
+  return [
+    {
+      dimension: "brandedClassification",
+      operator: "equals",
+      expression: branded === "branded" ? "BRANDED" : "NON_BRANDED",
+    },
+  ];
+}
+
+/**
+ * Normalises and checks filters before they reach the API, so the rules of the
+ * 2026-11 update fail with a clear message instead of an opaque 400:
+ * - brandedClassification takes only `equals` with BRANDED or NON_BRANDED,
+ * - it cannot be combined with a query filter in the same request,
+ * - the same dimension may not appear in both filters and filterLists.
+ * Returns the filters with brandedClassification values upper-cased.
+ */
+export function normaliseFilters(
+  filters: DimensionFilter[],
+  filterLists: FilterList[] = [],
+  searchType: SearchType = "web"
+): DimensionFilter[] {
+  const out = filters.map((f) => {
+    if (f.dimension !== "brandedClassification") return f;
+    if (!ALLOWED_DIMENSIONS[searchType].includes("brandedClassification")) {
+      throw new Error(
+        `searchType "${searchType}" has no queries and therefore no brandedClassification.`
+      );
+    }
+    if (f.operator !== "equals") {
+      throw new Error(
+        `brandedClassification only supports the operator "equals" (got "${f.operator}"). ` +
+          `For the other side of the split, filter on the other value.`
+      );
+    }
+    const value = f.expression.toUpperCase().replace(/[\s-]/g, "_");
+    if (!(BRANDED_VALUES as readonly string[]).includes(value)) {
+      throw new Error(
+        `brandedClassification must be BRANDED or NON_BRANDED, got "${f.expression}".`
+      );
+    }
+    return { ...f, expression: value };
+  });
+
+  const hasBranded = out.some((f) => f.dimension === "brandedClassification");
+  const hasQueryFilter = out.some((f) => f.dimension === "query");
+  if (hasBranded && hasQueryFilter) {
+    throw new Error(
+      "The API does not allow a brandedClassification filter together with a query filter. " +
+        "Group by query instead and filter the rows, or drop one of the two filters."
+    );
+  }
+
+  for (const list of filterLists) {
+    if (out.some((f) => f.dimension === list.dimension)) {
+      throw new Error(
+        `"${list.dimension}" is used both as a filter and as a list. Use one of the two.`
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * Builds filterLists for several devices and/or countries (API update
+ * 2026-11). A single value works too; it is the same as an equals filter.
+ */
+export function deviceCountryLists(
+  devices: string[] = [],
+  countries: string[] = [],
+  searchType: SearchType = "web"
+): FilterList[] {
+  const lists: FilterList[] = [];
+  if (devices.length > 0) {
+    if (!ALLOWED_DIMENSIONS[searchType].includes("device")) {
+      throw new Error(`searchType "${searchType}" has no device dimension, so it cannot be filtered by device.`);
+    }
+    const upper = [...new Set(devices.map((d) => d.toUpperCase()))];
+    const bad = upper.filter((d) => !(DEVICES as readonly string[]).includes(d));
+    if (bad.length > 0) {
+      throw new Error(`Unknown device(s) ${bad.join(", ")}. Allowed: ${DEVICES.join(", ")}.`);
+    }
+    lists.push({ dimension: "device", expressions: upper });
+  }
+  if (countries.length > 0) {
+    const lower = [...new Set(countries.map((c) => c.toLowerCase()))];
+    const bad = lower.filter((c) => !/^[a-z]{3}$/.test(c));
+    if (bad.length > 0) {
+      throw new Error(
+        `Countries must be ISO-3166-1 alpha-3 codes such as deu, aut, che - got ${bad.join(", ")}.`
+      );
+    }
+    lists.push({ dimension: "country", expressions: lower });
+  }
+  return lists;
+}
+
+/** Note for a response whose window starts before brand data exists. */
+export function brandedWindowNote(startDate: string): string | null {
+  return startDate < BRANDED_DATA_START
+    ? `The window starts ${startDate}, before brand data exists (${BRANDED_DATA_START}). ` +
+        `Days before ${BRANDED_DATA_START} carry no brandedClassification, so they are missing from branded/non-branded figures.`
+    : null;
+}
 
 /**
  * Validates that the requested dimensions are legal for the chosen surface.
@@ -327,7 +482,11 @@ export async function fetchAllRows(params: QueryParams): Promise<SearchAnalytics
         // Both spellings of the surface filter feed one API field. Undefined
         // means the API default, "web".
         type: params.type ?? params.searchType,
-        dimensionFilterGroups: params.dimensionFilterGroups,
+        // googleapis 176 predates filterLists (API update 2026-11); the field
+        // goes through as-is, so the group type is widened here only.
+        dimensionFilterGroups: params.dimensionFilterGroups as
+          | Array<{ filters: DimensionFilter[] }>
+          | undefined,
         rowLimit: pageSize,
         startRow,
         dataState: params.dataState ?? "all",

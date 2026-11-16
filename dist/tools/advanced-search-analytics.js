@@ -43,19 +43,28 @@ function sortAndPage(rows, orderBy = "clicks", orderDirection = "descending", st
     };
 }
 async function advancedSearchAnalytics(options = {}) {
-    const { days = 28, startDate: requestedStart, endDate: requestedEnd, dimensions = ["query"], filters = [], rowLimit = 100, startRow = 0, orderBy = "clicks", orderDirection = "descending", searchType = "web", dataState = "all", } = options;
+    const { days = 28, startDate: requestedStart, endDate: requestedEnd, dimensions = ["query"], filters = [], rowLimit = 100, startRow = 0, orderBy = "clicks", orderDirection = "descending", searchType = "web", dataState = "all", branded, devices = [], countries = [], } = options;
     (0, analytics_js_1.assertValidDimensions)(searchType, dimensions);
     const period = (0, analytics_js_1.resolveDateRange)(days, requestedStart, requestedEnd);
-    // Build dimension filter groups from user-provided filters
-    const dimensionFilterGroups = filters.length > 0
-        ? [{
-                filters: filters.map((f) => ({
-                    dimension: f.dimension,
-                    operator: f.operator,
-                    expression: f.expression,
-                })),
-            }]
+    if (branded && filters.some((f) => f.dimension === "brandedClassification")) {
+        throw new Error("Use either branded or a brandedClassification filter, not both.");
+    }
+    const filterLists = (0, analytics_js_1.deviceCountryLists)(devices, countries, searchType);
+    const allFilters = (0, analytics_js_1.normaliseFilters)([...filters, ...(0, analytics_js_1.brandedFilter)(branded)].map((f) => ({
+        dimension: f.dimension,
+        operator: f.operator,
+        expression: f.expression,
+    })), filterLists, searchType);
+    const dimensionFilterGroups = allFilters.length > 0 || filterLists.length > 0
+        ? [
+            {
+                filters: allFilters,
+                ...(filterLists.length > 0 ? { filterLists } : {}),
+            },
+        ]
         : undefined;
+    const usesBranded = dimensions.includes("brandedClassification") ||
+        allFilters.some((f) => f.dimension === "brandedClassification");
     // The API pages internally (25k rows per request); every call fetches the
     // full list so sorting and paging run over all rows, not over the first page.
     const rows = await (0, analytics_js_1.fetchAllRows)({
@@ -84,7 +93,15 @@ async function advancedSearchAnalytics(options = {}) {
         dimensions,
         period,
         dataState,
-        filtersApplied: filters,
+        filtersApplied: allFilters,
+        filterListsApplied: filterLists,
         searchType: searchType || "web",
+        branded: usesBranded
+            ? {
+                caveat: analytics_js_1.BRANDED_CAVEAT,
+                windowNote: (0, analytics_js_1.brandedWindowNote)(period.startDate),
+                emptyResult: rows.length === 0,
+            }
+            : null,
     };
 }

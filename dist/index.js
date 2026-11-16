@@ -30,6 +30,7 @@ const discover_analysis_js_1 = require("./tools/discover-analysis.js");
 const image_analysis_js_1 = require("./tools/image-analysis.js");
 const search_appearance_js_1 = require("./tools/search-appearance.js");
 const query_count_js_1 = require("./tools/query-count.js");
+const branded_analysis_js_1 = require("./tools/branded-analysis.js");
 // v2.3 image SEO tools — paired with the Image SEO post on suganthan.com.
 const image_keyword_overview_js_1 = require("./tools/image-keyword-overview.js");
 const image_search_quick_wins_js_1 = require("./tools/image-search-quick-wins.js");
@@ -75,6 +76,23 @@ server.registerTool = (name, config, handler) => {
 // query-based tools accept image/video/news but not discover (no query dimension).
 const SURFACES = ["web", "image", "video", "news", "discover", "googleNews"];
 const surfaceParam = (note) => zod_1.z.enum(SURFACES).default("web").describe(note);
+// webMultimodal (API update 2026-11: Lens, Circle to Search, image uploads) is
+// offered only where the tool passes the surface straight to the API.
+const SURFACES_EXT = [...SURFACES, "webMultimodal"];
+const QUERY_SURFACES = ["web", "image", "video", "news", "webMultimodal"];
+// Several devices / countries in one request (filterLists, API update 2026-11).
+const devicesParam = zod_1.z
+    .array(zod_1.z.enum(["MOBILE", "DESKTOP", "TABLET"]))
+    .optional()
+    .describe("Restrict to these devices, e.g. [\"MOBILE\", \"TABLET\"]. Omit for all devices.");
+const countriesParam = zod_1.z
+    .array(zod_1.z.string())
+    .optional()
+    .describe("Restrict to these countries as ISO-3166-1 alpha-3 codes, e.g. [\"deu\", \"aut\", \"che\"] for DACH. Omit for all countries.");
+const brandedParam = zod_1.z
+    .enum(["branded", "non_branded"])
+    .optional()
+    .describe("Only branded or only non-branded queries, as classified by Google (brandedClassification; data from 2026-02-21, eligible properties only). Cannot be combined with a query filter.");
 // Optional calendar date. Validity (real date, start before end, both given)
 // is checked in resolveDateRange(), which every date-range tool goes through.
 const isoDateParam = (note) => zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").optional().describe(note);
@@ -250,31 +268,37 @@ server.registerTool("verify_claim", {
 });
 // 12. Advanced Search Analytics
 server.registerTool("advanced_search_analytics", {
-    description: (0, tool_hints_js_1.describe)("advanced_search_analytics", "Run a custom search analytics query with flexible dimensions and filters. Supports country, device, query, and page filtering, plus search type (web/image/video/news/discover/googleNews). For power users who need specific data cuts. Use start_date/end_date for an exact window such as a calendar month (they replace days). Returns at most 500 rows per call, sorted by order_by; the response carries totalRows, hasMore and nextStartRow, so a longer list is read page by page by calling again with start_row = nextStartRow."),
+    description: (0, tool_hints_js_1.describe)("advanced_search_analytics", "Run a custom search analytics query with flexible dimensions and filters. Supports country, device, query, page and brandedClassification (branded vs non-branded) filtering, several countries or devices at once, plus search type (web/image/video/news/discover/googleNews/webMultimodal). For power users who need specific data cuts. Use start_date/end_date for an exact window such as a calendar month (they replace days). Returns at most 500 rows per call, sorted by order_by; the response carries totalRows, hasMore and nextStartRow, so a longer list is read page by page by calling again with start_row = nextStartRow."),
     inputSchema: {
         days: zod_1.z.number().default(28).describe("Number of days to analyse, ending yesterday. Ignored when start_date/end_date are given."),
         start_date: isoDateParam("First day of the window, YYYY-MM-DD (inclusive). Give together with end_date; replaces days. Example: 2026-10-01"),
         end_date: isoDateParam("Last day of the window, YYYY-MM-DD (inclusive). Give together with start_date. Example: 2026-10-31"),
-        dimensions: zod_1.z.array(zod_1.z.string()).default(["query"]).describe("Dimensions to group by: query, page, country, device, date"),
+        dimensions: zod_1.z.array(zod_1.z.string()).default(["query"]).describe("Dimensions to group by: query, page, country, device, date, searchAppearance, brandedClassification (rows keyed BRANDED / NON_BRANDED)"),
         filters: zod_1.z.array(zod_1.z.object({
-            dimension: zod_1.z.string().describe("Dimension to filter: query, page, country, device"),
-            operator: zod_1.z.string().describe("Operator: contains, notContains, equals, notEquals, includingRegex, excludingRegex"),
-            expression: zod_1.z.string().describe("Filter value"),
+            dimension: zod_1.z.string().describe("Dimension to filter: query, page, country, device, searchAppearance, brandedClassification"),
+            operator: zod_1.z.string().describe("Operator: contains, notContains, equals, notEquals, includingRegex, excludingRegex (brandedClassification: equals only)"),
+            expression: zod_1.z.string().describe("Filter value (brandedClassification: BRANDED or NON_BRANDED)"),
         })).default([]).describe("Dimension filters to apply"),
+        branded: brandedParam,
+        devices: devicesParam,
+        countries: countriesParam,
         row_limit: zod_1.z.number().default(100).describe("Rows to return in this call (max 500; higher values are lowered to 500)"),
         start_row: zod_1.z.number().int().min(0).default(0).describe("Zero-based offset into the sorted result, for paging: 0 for the first page, then the nextStartRow of the previous response"),
         order_by: zod_1.z.string().default("clicks").describe("Sort by: clicks, impressions, ctr, position"),
         order_direction: zod_1.z.string().default("descending").describe("Sort direction: ascending, descending"),
         data_state: zod_1.z.enum(["all", "final"]).default("all").describe("all (default): includes fresh, not yet final days, matching the GSC dashboard. final: finalised data only."),
-        surface: surfaceParam("Surface to query: web (default), image, video, news, discover, googleNews. Dimensions must be valid for the chosen surface."),
+        surface: zod_1.z.enum(SURFACES_EXT).default("web").describe("Surface to query: web (default), image, video, news, discover, googleNews, webMultimodal (Google Lens, Circle to Search, image uploads). Dimensions must be valid for the chosen surface."),
     },
-}, async ({ days, start_date, end_date, dimensions, filters, row_limit, start_row, order_by, order_direction, data_state, surface }) => {
+}, async ({ days, start_date, end_date, dimensions, filters, branded, devices, countries, row_limit, start_row, order_by, order_direction, data_state, surface }) => {
     const results = await (0, advanced_search_analytics_js_1.advancedSearchAnalytics)({
         days,
         startDate: start_date,
         endDate: end_date,
         dimensions,
         filters,
+        branded,
+        devices,
+        countries,
         rowLimit: row_limit,
         startRow: start_row,
         orderBy: order_by,
@@ -282,7 +306,7 @@ server.registerTool("advanced_search_analytics", {
         searchType: surface,
         dataState: data_state,
     });
-    const wrapped = (0, guardrails_js_1.withMeta)(results, "advanced_search_analytics", { days, start_date, end_date, dimensions, filters, row_limit, start_row, order_by, order_direction, data_state, surface });
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "advanced_search_analytics", { days, start_date, end_date, dimensions, filters, branded, devices, countries, row_limit, start_row, order_by, order_direction, data_state, surface });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
@@ -462,6 +486,41 @@ server.registerTool("query_count", {
 }, async ({ days, start_date, end_date, url, url_contains, granularity, min_position, max_position, compare_previous, include_pages, top_pages, surface, device, country }) => {
     const results = await (0, query_count_js_1.queryCount)(days, compare_previous, include_pages, top_pages, surface, url, url_contains, granularity, min_position, max_position, device, country, start_date, end_date);
     const wrapped = (0, guardrails_js_1.withMeta)(results, "query_count", { days, start_date, end_date, url, url_contains, granularity, min_position, max_position, compare_previous, include_pages, top_pages, surface, device, country });
+    return {
+        content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
+    };
+});
+// 25. Branded vs non-branded
+server.registerTool("branded_analysis", {
+    description: (0, tool_hints_js_1.describe)("branded_analysis", "Split search traffic into branded and non-branded queries using Google's own brandedClassification (Search Analytics API, data from 2026-02-21, eligible top-level properties only). Returns clicks, impressions, CTR and position per side with shares, the property total and the unclassified (anonymized) remainder, the change against the preceding window, an optional day/week/month series of the branded share, and the top queries on each side. Scope it with url_contains, devices and countries (several at once, e.g. DACH)."),
+    inputSchema: {
+        days: zod_1.z.number().default(28).describe("Number of days to analyse, ending yesterday. Ignored when start_date/end_date are given."),
+        start_date: isoDateParam("First day of the window, YYYY-MM-DD (inclusive). Give together with end_date; replaces days. Brand data starts 2026-02-21."),
+        end_date: isoDateParam("Last day of the window, YYYY-MM-DD (inclusive). Give together with start_date."),
+        compare_previous: zod_1.z.boolean().default(true).describe("Also compute the preceding window of the same length in days"),
+        granularity: zod_1.z.enum(["none", "day", "week", "month"]).default("none").describe("Add a time series of branded vs non-branded per day, ISO week or calendar month (one API request)"),
+        top_queries: zod_1.z.number().int().min(0).max(500).default(10).describe("Top queries by clicks per side; 0 for none"),
+        url_contains: zod_1.z.string().optional().describe("Only pages whose URL contains this string, e.g. /ratgeber/"),
+        devices: devicesParam,
+        countries: countriesParam,
+        data_state: zod_1.z.enum(["all", "final"]).default("all").describe("all (default): includes fresh, not yet final days. final: finalised data only."),
+        surface: zod_1.z.enum(QUERY_SURFACES).default("web").describe("Surface: web (default), image, video, news, webMultimodal. Discover and Google News have no queries and no brand split."),
+    },
+}, async ({ days, start_date, end_date, compare_previous, granularity, top_queries, url_contains, devices, countries, data_state, surface }) => {
+    const results = await (0, branded_analysis_js_1.brandedAnalysis)({
+        days,
+        startDate: start_date,
+        endDate: end_date,
+        comparePrevious: compare_previous,
+        granularity,
+        topQueries: top_queries,
+        urlContains: url_contains,
+        devices,
+        countries,
+        dataState: data_state,
+        searchType: surface,
+    });
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "branded_analysis", { days, start_date, end_date, compare_previous, granularity, top_queries, url_contains, devices, countries, data_state, surface });
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };

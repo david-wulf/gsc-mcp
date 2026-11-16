@@ -1,8 +1,15 @@
-import { SearchAnalyticsRow, SearchType, DataState } from "../analytics.js";
+import { SearchAnalyticsRow, SearchType, DataState, BrandedChoice, FilterList } from "../analytics.js";
 interface Filter {
     dimension: string;
     operator: string;
     expression: string;
+}
+/** Set when the request touches brandedClassification. */
+interface BrandedInfo {
+    caveat: string;
+    windowNote: string | null;
+    /** True when a branded query matched nothing: likely an ineligible property. */
+    emptyResult: boolean;
 }
 /** Most rows a single call returns. Larger lists are read page by page with start_row. */
 export declare const MAX_PAGE_SIZE = 500;
@@ -33,7 +40,9 @@ interface AdvancedSearchResult {
     };
     dataState: DataState;
     filtersApplied: Filter[];
+    filterListsApplied: FilterList[];
     searchType: string;
+    branded: BrandedInfo | null;
 }
 export interface AdvancedSearchOptions {
     days?: number;
@@ -47,6 +56,12 @@ export interface AdvancedSearchOptions {
     orderDirection?: string;
     searchType?: SearchType;
     dataState?: DataState;
+    /** Shortcut for a brandedClassification filter. */
+    branded?: BrandedChoice;
+    /** Several devices in one request (filterLists). */
+    devices?: string[];
+    /** Several countries in one request (filterLists), ISO alpha-3. */
+    countries?: string[];
 }
 export interface Page {
     rows: SearchAnalyticsRow[];

@@ -2,7 +2,7 @@
 
 An MCP server for Google Search Console that lets you ask Claude questions about your search data and get real answers. Not raw API rows. Actual analysis.
 
-33 tools. OAuth or service account. Free and open source. Runs on your machine: your data goes straight from this computer to Google, and nothing passes through anyone else's servers.
+34 tools. OAuth or service account. Free and open source. Runs on your machine: your data goes straight from this computer to Google, and nothing passes through anyone else's servers.
 
 > **This is a fork.** It tracks [Suganthan-Mohanadasan/Suganthans-GSC-MCP](https://github.com/Suganthan-Mohanadasan/Suganthans-GSC-MCP) and currently sits on upstream v2.5.1. On top of that it adds four tools (`discover_analysis`, `image_analysis`, `search_appearance`, `query_count`), a dimension guard that rejects illegal search-type/dimension combinations before the API returns an opaque 400, optional device and country filters on the core analysis tools, CTR benchmarking against the property's own measured click curve instead of a third-party study table, and service-account keys read from a secret manager rather than a file on disk. Fork version 2.6.0. Everything below that is not marked as fork-only comes from upstream.
 
@@ -171,9 +171,9 @@ You can also point a single call at any property your credentials can see withou
 
 Exact windows and long lists (fork change): `advanced_search_analytics` and `query_count` take an optional `start_date`/`end_date` pair (YYYY-MM-DD, both inclusive) that replaces `days`, so a calendar month is one call instead of "the last N days". `advanced_search_analytics` returns at most 500 rows per call but no longer drops the rest: the response carries `totalRows`, `hasMore` and `nextStartRow`, and calling again with `start_row` reads the next page of the same sorted list (ties are broken on the row keys, so pages never overlap). It also takes `data_state` (`all`, the default, or `final`). Example, the top 1,000 non-brand queries of October: `start_date: 2026-10-01, end_date: 2026-10-31, dimensions: [query], filters: [{dimension: query, operator: excludingRegex, expression: "brand|brnd"}], row_limit: 500`, then the same call with `start_row: 500`.
 
-## All 33 tools
+## All 34 tools
 
-### Only in this fork (4)
+### Only in this fork (5)
 
 | Tool | What it answers |
 |---|---|
@@ -181,6 +181,7 @@ Exact windows and long lists (fork change): `advanced_search_analytics` and `que
 | `image_analysis` | How is image search performing as a surface? Runs `type=image` in isolation and returns top image queries, top pages and a prior-period comparison. Complements the per-tool image suite below by answering the surface-level question first |
 | `search_appearance` | Which rich-result types does the site win, and what do they earn? Breaks performance down by `searchAppearance`, which the API only allows as the sole grouping dimension — the guard enforces that instead of letting the call fail |
 | `query_count` | How many distinct keywords does the site rank for, and is that number growing? Counts unique queries, optionally scoped to a URL, sliced over time, or bucketed by position band |
+| `branded_analysis` | How much search traffic comes from people who already know the brand? Splits clicks, impressions, CTR and position into branded and non-branded using Google's own `brandedClassification` (API update 2026-11; data from 2026-02-21, eligible top-level properties only), with shares, the unclassified remainder, a prior-period change, an optional day/week/month series and the top queries per side |
 
 ### Analysis
 
@@ -272,6 +273,8 @@ Step-by-step setup with screenshots, use cases, and examples:
 **[suganthan.com/blog/google-search-console-mcp-server/](https://suganthan.com/blog/google-search-console-mcp-server/)**
 
 ## Changelog
+
+**v2.8.0 (fork)** Search Analytics API update of November 2026. New tool `branded_analysis` for the branded / non-branded split. `advanced_search_analytics` accepts `brandedClassification` as a dimension and a filter (plus a `branded` shortcut), several devices or countries in one call (`devices`, `countries`, sent as the new `filterLists`, e.g. DACH), and the `webMultimodal` surface (Google Lens, Circle to Search, image uploads). The API rules fail early with a clear message: brand filter only with `equals`, never together with a query filter, and no dimension both as filter and list. An empty branded result is flagged, because ineligible properties return no rows rather than zero.
 
 **v2.7.0 (fork)** `site_url` on every property tool. Before, only 14 of 33 tools accepted a per-call property; the other 19, including `quick_wins` and `inspect_url`, always ran against `GSC_SITE_URL`. The override now lives in an `AsyncLocalStorage` that `getConfig()` reads, so nested calls (`generate_report`, `inspectUrl`, `fetchAllRows`) pick it up without each tool threading it through; the per-tool `siteUrl` parameters the 14 older tools carried, and the override argument on `fetchAllRows`, are gone. `_meta.site_url` in every result names the property used.
 

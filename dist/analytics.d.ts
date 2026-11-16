@@ -3,13 +3,30 @@
  * why every legacy tool only ever sees web data. Set this explicitly to query
  * Discover, Image, Video or News surfaces in isolation.
  */
-export type SearchType = "web" | "image" | "video" | "news" | "discover" | "googleNews";
+export type SearchType = "web" | "image" | "video" | "news" | "discover" | "googleNews" | "webMultimodal";
 /**
  * Dimensions the API actually allows per surface. Used for a friendly guard so
  * an invalid combination fails with a clear message instead of an opaque 400.
  * (searchAppearance is special: it must be the ONLY grouping dimension.)
+ *
+ * webMultimodal (API update 2026-11): Google Lens, Circle to Search and image
+ * uploads in Search. brandedClassification (same update) splits query-based
+ * surfaces into BRANDED / NON_BRANDED; Discover and Google News carry no
+ * queries, so they have no brand split either.
  */
 export declare const ALLOWED_DIMENSIONS: Record<SearchType, string[]>;
+/**
+ * Branded / non-branded classification (Search Analytics API update, 2026-11).
+ * Google classifies each query itself; the values are BRANDED and NON_BRANDED.
+ * Data exists from this day on, and only for eligible properties (top-level
+ * properties with enough query volume). Other properties get no rows at all —
+ * an empty answer there means "not classified", never "no brand traffic".
+ */
+export declare const BRANDED_DATA_START = "2026-02-21";
+export declare const BRANDED_VALUES: readonly ["BRANDED", "NON_BRANDED"];
+export type BrandedValue = (typeof BRANDED_VALUES)[number];
+export type BrandedChoice = "branded" | "non_branded";
+export declare const BRANDED_CAVEAT: string;
 export interface SearchAnalyticsRow {
     keys: string[];
     clicks: number;
@@ -29,6 +46,11 @@ export interface QueryParams {
             operator: string;
             expression: string;
         }>;
+        /**
+         * Exact-match lists (API update 2026-11): several countries or devices in
+         * one request, e.g. DACH = [deu, aut, che]. Only country and device.
+         */
+        filterLists?: FilterList[];
     }>;
     rowLimit?: number;
     /** Hard cap on rows fetched across all pages. Omit for no cap. */
@@ -46,6 +68,33 @@ export interface QueryParams {
     dataState?: DataState;
 }
 export type DataState = "final" | "all";
+export interface DimensionFilter {
+    dimension: string;
+    operator: string;
+    expression: string;
+}
+export interface FilterList {
+    dimension: "country" | "device";
+    expressions: string[];
+}
+/** Filter for one side of the brand split; undefined means both sides. */
+export declare function brandedFilter(branded?: BrandedChoice): DimensionFilter[];
+/**
+ * Normalises and checks filters before they reach the API, so the rules of the
+ * 2026-11 update fail with a clear message instead of an opaque 400:
+ * - brandedClassification takes only `equals` with BRANDED or NON_BRANDED,
+ * - it cannot be combined with a query filter in the same request,
+ * - the same dimension may not appear in both filters and filterLists.
+ * Returns the filters with brandedClassification values upper-cased.
+ */
+export declare function normaliseFilters(filters: DimensionFilter[], filterLists?: FilterList[], searchType?: SearchType): DimensionFilter[];
+/**
+ * Builds filterLists for several devices and/or countries (API update
+ * 2026-11). A single value works too; it is the same as an equals filter.
+ */
+export declare function deviceCountryLists(devices?: string[], countries?: string[], searchType?: SearchType): FilterList[];
+/** Note for a response whose window starts before brand data exists. */
+export declare function brandedWindowNote(startDate: string): string | null;
 /**
  * Validates that the requested dimensions are legal for the chosen surface.
  * Throws a descriptive error instead of letting the API return a generic 400.

@@ -5,12 +5,27 @@ import {
   SearchType,
   DataState,
   assertValidDimensions,
+  BrandedChoice,
+  BRANDED_CAVEAT,
+  brandedFilter,
+  brandedWindowNote,
+  deviceCountryLists,
+  FilterList,
+  normaliseFilters,
 } from "../analytics.js";
 
 interface Filter {
   dimension: string;
   operator: string;
   expression: string;
+}
+
+/** Set when the request touches brandedClassification. */
+interface BrandedInfo {
+  caveat: string;
+  windowNote: string | null;
+  /** True when a branded query matched nothing: likely an ineligible property. */
+  emptyResult: boolean;
 }
 
 /** Most rows a single call returns. Larger lists are read page by page with start_row. */
@@ -40,7 +55,9 @@ interface AdvancedSearchResult {
   period: { startDate: string; endDate: string; days: number };
   dataState: DataState;
   filtersApplied: Filter[];
+  filterListsApplied: FilterList[];
   searchType: string;
+  branded: BrandedInfo | null;
 }
 
 export interface AdvancedSearchOptions {
@@ -55,6 +72,12 @@ export interface AdvancedSearchOptions {
   orderDirection?: string;
   searchType?: SearchType;
   dataState?: DataState;
+  /** Shortcut for a brandedClassification filter. */
+  branded?: BrandedChoice;
+  /** Several devices in one request (filterLists). */
+  devices?: string[];
+  /** Several countries in one request (filterLists), ISO alpha-3. */
+  countries?: string[];
 }
 
 export interface Page {
@@ -128,22 +151,42 @@ export async function advancedSearchAnalytics(
     orderDirection = "descending",
     searchType = "web",
     dataState = "all",
+    branded,
+    devices = [],
+    countries = [],
   } = options;
 
   assertValidDimensions(searchType, dimensions);
 
   const period = resolveDateRange(days, requestedStart, requestedEnd);
 
-  // Build dimension filter groups from user-provided filters
-  const dimensionFilterGroups = filters.length > 0
-    ? [{
-        filters: filters.map((f) => ({
-          dimension: f.dimension,
-          operator: f.operator,
-          expression: f.expression,
-        })),
-      }]
-    : undefined;
+  if (branded && filters.some((f) => f.dimension === "brandedClassification")) {
+    throw new Error("Use either branded or a brandedClassification filter, not both.");
+  }
+  const filterLists = deviceCountryLists(devices, countries, searchType);
+  const allFilters = normaliseFilters(
+    [...filters, ...brandedFilter(branded)].map((f) => ({
+      dimension: f.dimension,
+      operator: f.operator,
+      expression: f.expression,
+    })),
+    filterLists,
+    searchType
+  );
+
+  const dimensionFilterGroups =
+    allFilters.length > 0 || filterLists.length > 0
+      ? [
+          {
+            filters: allFilters,
+            ...(filterLists.length > 0 ? { filterLists } : {}),
+          },
+        ]
+      : undefined;
+
+  const usesBranded =
+    dimensions.includes("brandedClassification") ||
+    allFilters.some((f) => f.dimension === "brandedClassification");
 
   // The API pages internally (25k rows per request); every call fetches the
   // full list so sorting and paging run over all rows, not over the first page.
@@ -175,7 +218,15 @@ export async function advancedSearchAnalytics(
     dimensions,
     period,
     dataState,
-    filtersApplied: filters,
+    filtersApplied: allFilters,
+    filterListsApplied: filterLists,
     searchType: searchType || "web",
+    branded: usesBranded
+      ? {
+          caveat: BRANDED_CAVEAT,
+          windowNote: brandedWindowNote(period.startDate),
+          emptyResult: rows.length === 0,
+        }
+      : null,
   };
 }
