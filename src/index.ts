@@ -23,7 +23,7 @@ import { checkAlerts } from "./tools/check-alerts.js";
 import { contentRecommendations } from "./tools/content-recommendations.js";
 import { generateReport } from "./tools/generate-report.js";
 import { multiSiteDashboard } from "./tools/multi-site-dashboard.js";
-import { submitUrl, submitBatch } from "./tools/submit-url.js";
+import { submitUrl, submitBatch, indexingStatus } from "./tools/submit-url.js";
 import { submitSitemap, listSitemaps } from "./tools/submit-sitemap.js";
 // Fork tools: surfaces the upstream image suite does not cover.
 import { discoverAnalysis } from "./tools/discover-analysis.js";
@@ -49,7 +49,7 @@ import { imagePageAudit } from "./tools/image-page-audit.js";
 
 const server = new McpServer({
   name: "gsc-mcp",
-  version: "2.9.0",
+  version: "2.9.1",
 });
 
 // Property pro Aufruf: Jedes Tool, das eine GSC-Property abfragt, bekommt den
@@ -65,7 +65,7 @@ const SITE_URL_PARAM = z
     "Omit to use this instance's default property (GSC_SITE_URL). One of the configured service accounts must have access to it."
   );
 const NO_PROPERTY_TOOLS = new Set([
-  "multi_site_dashboard", "submit_url", "submit_batch", "image_page_audit", "list_properties",
+  "multi_site_dashboard", "submit_url", "submit_batch", "indexing_status", "image_page_audit", "list_properties",
 ]);
 
 // Mehrere Service-Accounts: runForProperty() nimmt den bevorzugten Account mit Zugriff
@@ -501,6 +501,24 @@ server.registerTool(
       const results = await submitBatch(urls, action);
       return {
         content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+      };
+    }
+);
+
+// 18b. Indexing status (read-only)
+server.registerTool(
+  "indexing_status",
+  {
+    description: describe("indexing_status", "Read-only: the last notifications Google has on record for a URL via the Indexing API (urlNotifications.getMetadata). Also checks, without submitting anything, that a configured service account is Owner of a property covering the URL and the Indexing API is enabled."),
+    inputSchema: {
+        url: z.string().describe("The full URL to look up"),
+      },
+  },
+  async ({ url }) => {
+      const results = await indexingStatus(url);
+      const wrapped = withMeta(results, "indexing_status", { url }, "Google Indexing API (live data)");
+      return {
+        content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
       };
     }
 );

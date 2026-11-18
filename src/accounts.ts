@@ -1,7 +1,8 @@
 import { google } from "googleapis";
-import { searchconsole_v1 } from "googleapis";
+import { searchconsole_v1, indexing_v3 } from "googleapis";
 import * as fs from "fs";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { hostMatchesProperties } from "./safe-fetch.js";
 
 /**
  * Mehrere Service-Accounts in einer Instanz.
@@ -231,12 +232,16 @@ export class AccountsExhaustedError extends Error {
   readonly tried: string[];
   readonly status = 403;
   readonly exhausted = true;
-  constructor(siteUrl: string | undefined, attempts: Array<{ email: string; error: unknown }>) {
+  constructor(
+    siteUrl: string | undefined,
+    attempts: Array<{ email: string; error: unknown }>,
+    hint = "Add one of these accounts as a user of the property in Search Console " +
+      "(list_properties shows what each account can see)."
+  ) {
     super(
       `No configured service account has access to ${siteUrl ?? "this property"}. Tried: ` +
       attempts.map((a) => `${a.email} (${shortReason(a.error)})`).join("; ") +
-      `. Add one of these accounts as a user of the property in Search Console ` +
-      `(list_properties shows what each account can see).`
+      `. ${hint}`
     );
     this.name = "AccountsExhaustedError";
     this.tried = attempts.map((a) => a.email);
@@ -261,7 +266,70 @@ export async function runWithAccountFallback<T>(
   siteUrl: string | undefined,
   fn: () => Promise<T>
 ): Promise<T> {
-  const accounts = await accountsFor(siteUrl);
+  return tryAccounts(siteUrl, await accountsFor(siteUrl), fn);
+}
+
+// ---------------------------------------------------------------------------
+// Indexing API: URL-basiert, braucht den Account als Inhaber (siteOwner)
+
+const INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing";
+const indexingCache = new Map<string, indexing_v3.Indexing>();
+
+export function indexingClientFor(account: GscAccount): indexing_v3.Indexing {
+  let client = indexingCache.get(account.email);
+  if (!client) {
+    const auth = new google.auth.GoogleAuth({ credentials: account.credentials, scopes: [INDEXING_SCOPE] });
+    client = google.indexing({ version: "v3", auth });
+    indexingCache.set(account.email, client);
+  }
+  return client;
+}
+
+/**
+ * Accounts fuer eine einzelne URL: zuerst die, die eine passende Property als Inhaber
+ * fuehren (nur das akzeptiert die Indexing API), dann die mit anderer Berechtigung auf
+ * einer passenden Property, dann der Rest - jeweils in Vorzugsreihenfolge.
+ */
+export async function accountsForUrl(url: string): Promise<GscAccount[]> {
+  const accounts = getServiceAccounts();
+  if (accounts.length <= 1) return accounts;
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return accounts;
+  }
+  const rank = new Map<GscAccount, number>();
+  await Promise.all(
+    accounts.map(async (acc) => {
+      try {
+        const matching = (await sitesOf(acc)).filter((s) => hostMatchesProperties(host, [s.siteUrl]));
+        rank.set(acc, matching.some((s) => s.permissionLevel === "siteOwner") ? 0 : matching.length > 0 ? 1 : 2);
+      } catch {
+        rank.set(acc, 2);
+      }
+    })
+  );
+  return [...accounts].sort((a, b) => (rank.get(a) ?? 2) - (rank.get(b) ?? 2));
+}
+
+/** Wie runWithAccountFallback, aber fuer eine URL (Indexing API). */
+export async function runForUrl<T>(url: string, fn: () => Promise<T>): Promise<T> {
+  return tryAccounts(
+    url,
+    await accountsForUrl(url),
+    fn,
+    "The Indexing API needs the account as Owner of a property covering the URL (Full user is not " +
+      "enough) and the Web Search Indexing API enabled in the account's Cloud project."
+  );
+}
+
+async function tryAccounts<T>(
+  label: string | undefined,
+  accounts: GscAccount[],
+  fn: () => Promise<T>,
+  hint?: string
+): Promise<T> {
   if (accounts.length === 0) return fn();
   if (accounts.length === 1) return withAccount(accounts[0], fn);
   const attempts: Array<{ email: string; error: unknown }> = [];
@@ -273,7 +341,7 @@ export async function runWithAccountFallback<T>(
       attempts.push({ email: acc.email, error: err });
     }
   }
-  throw new AccountsExhaustedError(siteUrl, attempts);
+  throw new AccountsExhaustedError(label, attempts, hint);
 }
 
 /** Nur fuer Tests: sites.list ersetzen und Zwischenspeicher leeren. */
@@ -286,5 +354,6 @@ export const _testing = {
     accountCache = accounts;
     sitesCache.clear();
     clientCache.clear();
+    indexingCache.clear();
   },
 };

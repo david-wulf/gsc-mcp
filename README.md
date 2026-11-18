@@ -2,7 +2,7 @@
 
 An MCP server for Google Search Console that lets you ask Claude questions about your search data and get real answers. Not raw API rows. Actual analysis.
 
-35 tools. OAuth or service account. Free and open source. Runs on your machine: your data goes straight from this computer to Google, and nothing passes through anyone else's servers.
+36 tools. OAuth or service account. Free and open source. Runs on your machine: your data goes straight from this computer to Google, and nothing passes through anyone else's servers.
 
 > **This is a fork.** It tracks [Suganthan-Mohanadasan/Suganthans-GSC-MCP](https://github.com/Suganthan-Mohanadasan/Suganthans-GSC-MCP) and currently sits on upstream v2.5.1. On top of that it adds four tools (`discover_analysis`, `image_analysis`, `search_appearance`, `query_count`), a dimension guard that rejects illegal search-type/dimension combinations before the API returns an opaque 400, optional device and country filters on the core analysis tools, CTR benchmarking against the property's own measured click curve instead of a third-party study table, and service-account keys read from a secret manager rather than a file on disk. Fork version 2.6.0. Everything below that is not marked as fork-only comes from upstream.
 
@@ -171,9 +171,9 @@ You can also point a single call at any property your credentials can see withou
 
 Exact windows and long lists (fork change): `advanced_search_analytics` and `query_count` take an optional `start_date`/`end_date` pair (YYYY-MM-DD, both inclusive) that replaces `days`, so a calendar month is one call instead of "the last N days". `advanced_search_analytics` returns at most 500 rows per call but no longer drops the rest: the response carries `totalRows`, `hasMore` and `nextStartRow`, and calling again with `start_row` reads the next page of the same sorted list (ties are broken on the row keys, so pages never overlap). It also takes `data_state` (`all`, the default, or `final`). Example, the top 1,000 non-brand queries of October: `start_date: 2026-10-01, end_date: 2026-10-31, dimensions: [query], filters: [{dimension: query, operator: excludingRegex, expression: "brand|brnd"}], row_limit: 500`, then the same call with `start_row: 500`.
 
-## All 35 tools
+## All 36 tools
 
-### Only in this fork (6)
+### Only in this fork (7)
 
 | Tool | What it answers |
 |---|---|
@@ -182,6 +182,7 @@ Exact windows and long lists (fork change): `advanced_search_analytics` and `que
 | `search_appearance` | Which rich-result types does the site win, and what do they earn? Breaks performance down by `searchAppearance`, which the API only allows as the sole grouping dimension — the guard enforces that instead of letting the call fail |
 | `query_count` | How many distinct keywords does the site rank for, and is that number growing? Counts unique queries, optionally scoped to a URL, sliced over time, or bucketed by position band |
 | `branded_analysis` | How much search traffic comes from people who already know the brand? Splits clicks, impressions, CTR and position into branded and non-branded using Google's own `brandedClassification` (API update 2026-11; data from 2026-02-21, eligible top-level properties only), with shares, the unclassified remainder, a prior-period change, an optional day/week/month series and the top queries per side |
+| `indexing_status` | Has this URL been notified through the Indexing API, and when? Read-only (`urlNotifications.getMetadata`); it also proves, without submitting anything, that a configured account owns a property covering the URL and the Indexing API is enabled |
 | `list_properties` | Which properties can each configured service account see, with which permission level, and in which order are the accounts tried? Client e-mails only, never key data. The first stop when a property answers with a permission error |
 
 ### Analysis
@@ -277,6 +278,8 @@ Step-by-step setup with screenshots, use cases, and examples:
 **[suganthan.com/blog/google-search-console-mcp-server/](https://suganthan.com/blog/google-search-console-mcp-server/)**
 
 ## Changelog
+
+**v2.9.1 (fork)** The Indexing API (`submit_url`, `submit_batch`) now uses the same keys as every other tool. Before, it read only `GSC_KEY_FILE`, so any instance fed through `GSC_SERVICE_ACCOUNT_JSON` failed every submission with "GSC_KEY_FILE is required". Each URL goes to the account that is Owner of a property covering it, falling back to the next account on 403; the error names the accounts tried and the two preconditions (Owner, not Full user; Web Search Indexing API enabled in the Cloud project). New read-only tool `indexing_status` checks a URL without submitting it.
 
 **v2.9.0 (fork)** Several service accounts in one instance. Every `GSC_SERVICE_ACCOUNT_JSON_<NAME>` variable adds an account; `GSC_ACCOUNT_ORDER` sets the preference. Each call picks the preferred account that lists the property in `sites.list` and repeats the whole call with the next account when Google refuses with 403 ("insufficient permission", "you do not own this site"), so a property shared with only one of the accounts just works. The sitemap tools try every account on the exact property before falling back to the URL-prefix variants. When all accounts are refused, the error names each account tried and Google's reason, never key data. Clients are now built per account instead of through the global `google.options()`. New tool `list_properties` shows what each account can see.
 

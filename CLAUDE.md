@@ -1,7 +1,7 @@
 # CLAUDE.md — Suganthans-GSC-MCP
 
 ## Zweck
-MCP-Server für die Google Search Console API (Search Analytics, URL Inspection, Sitemaps, Indexing API) mit 35 SEO-Analyse-Tools. Fork von `Suganthan-Mohanadasan/Suganthans-GSC-MCP` (Basis v2.5.1), Fork-Version 2.9.0; läuft bei David je Property als eigene Server-Instanz.
+MCP-Server für die Google Search Console API (Search Analytics, URL Inspection, Sitemaps, Indexing API) mit 36 SEO-Analyse-Tools. Fork von `Suganthan-Mohanadasan/Suganthans-GSC-MCP` (Basis v2.5.1), Fork-Version 2.9.1; läuft bei David je Property als eigene Server-Instanz.
 
 ## Aufbau
 - Einstieg: `src/index.ts` — `McpServer`, alle Tools per `server.registerTool()`; `node dist/index.js setup` startet den OAuth-Einrichtungsassistenten (`src/setup.ts`)
@@ -14,7 +14,7 @@ MCP-Server für die Google Search Console API (Search Analytics, URL Inspection,
   - Upstream ziehen: `git fetch upstream && git merge upstream/main` (Muster: `0e331e5` „Merge upstream v2.5.1 into the fork"), danach README-Fork-Hinweis und `package.json`-Version nachziehen. Beiträge an Upstream laufen als PR von `david-wulf` (vgl. Merge PR #1)
 
 ## Tools
-- Lesend: `quick_wins`, `ctr_opportunities`, `traffic_drops`, `content_gaps`, `site_snapshot`, `inspect_url`, `cannibalization_check`, `content_decay`, `topic_cluster_performance`, `ctr_vs_benchmark`, `verify_claim`, `advanced_search_analytics`, `check_alerts`, `content_recommendations`, `generate_report`, `multi_site_dashboard`, `list_sitemaps`, `list_properties` (je Account die sichtbaren Properties, nur client_email), `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`, `branded_analysis`, `genai_conversation_queries`, `image_keyword_overview`, `image_search_quick_wins`, `compare_web_vs_image`, `image_pages_overview`, `image_keyword_trends`, `image_impressions_no_clicks`, `image_content_decay`, `image_page_audit` (holt zusätzlich die Seite — nur Hosts von Properties des Kontos, keine internen Adressen, über `src/safe-fetch.ts`)
+- Lesend: `quick_wins`, `ctr_opportunities`, `traffic_drops`, `content_gaps`, `site_snapshot`, `inspect_url`, `cannibalization_check`, `content_decay`, `topic_cluster_performance`, `ctr_vs_benchmark`, `verify_claim`, `advanced_search_analytics`, `check_alerts`, `content_recommendations`, `generate_report`, `multi_site_dashboard`, `list_sitemaps`, `list_properties` (je Account die sichtbaren Properties, nur client_email), `indexing_status` (Indexing-API-Metadaten einer URL, reicht nichts ein), `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`, `branded_analysis`, `genai_conversation_queries`, `image_keyword_overview`, `image_search_quick_wins`, `compare_web_vs_image`, `image_pages_overview`, `image_keyword_trends`, `image_impressions_no_clicks`, `image_content_decay`, `image_page_audit` (holt zusätzlich die Seite — nur Hosts von Properties des Kontos, keine internen Adressen, über `src/safe-fetch.ts`)
 - **Schreibend**: `submit_url`, `submit_batch` (Indexing API), `submit_sitemap` (Sitemap in GSC einreichen)
 
 ## Lokal starten & prüfen
@@ -43,8 +43,9 @@ npm start            # node dist/index.js
 - Keine Schlüssel/Client-Secrets öffnen, ausgeben oder committen (`.gitignore` ignoriert `*.json` außer package/tsconfig/manifest). `src/embedded-client.ts` bleibt leer.
 - `submit_url`, `submit_batch`, `submit_sitemap` nur mit ausdrücklicher Freigabe pro Aufruf.
 
+## Indexing API
+`submit_url`/`submit_batch`/`indexing_status` nutzen seit v2.9.1 dieselben Schlüssel wie alle Werkzeuge (`runForUrl()` in `accounts.ts`): je URL zuerst der Account, der eine passende Property als **Inhaber** führt, bei 403 der nächste. Voraussetzungen bei Google: Account als Inhaber (nicht „Uneingeschränkt“) und „Web Search Indexing API“ im Cloud-Projekt des Accounts aktiviert. Bis v2.9.0 las dieser Weg nur `GSC_KEY_FILE` und scheiterte im Gateway immer.
+
 ## Offen
-- `submit-url.ts` verlangt im Service-Account-Modus `GSC_KEY_FILE`; Instanzen nur mit `GSC_SERVICE_ACCOUNT_JSON` (Infisical-Weg) können damit vermutlich nicht einreichen — nicht geprüft.
 - Remotes `upstream` und `sug` zeigen auf dieselbe URL.
-- Mehrere Accounts gelten nicht für `submit_url`/`submit_batch` (Indexing API, eigener Weg über `GSC_KEY_FILE` in `submit-url.ts`).
 - Werkzeuge, die einen 403 intern abfangen statt ihn zu werfen, bekommen keinen Wiederholversuch; sie laufen nur über die Auswahl per `sites.list`.

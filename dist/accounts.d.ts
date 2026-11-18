@@ -1,4 +1,4 @@
-import { searchconsole_v1 } from "googleapis";
+import { searchconsole_v1, indexing_v3 } from "googleapis";
 /**
  * Mehrere Service-Accounts in einer Instanz.
  *
@@ -54,7 +54,7 @@ export declare class AccountsExhaustedError extends Error {
     constructor(siteUrl: string | undefined, attempts: Array<{
         email: string;
         error: unknown;
-    }>);
+    }>, hint?: string);
 }
 /** Erste Zeile der Google-Meldung, gekuerzt. Enthaelt nie Schluesseldaten. */
 export declare function shortReason(err: unknown): string;
@@ -65,6 +65,15 @@ export declare function shortReason(err: unknown): string;
  * ein einfacher Aufruf.
  */
 export declare function runWithAccountFallback<T>(siteUrl: string | undefined, fn: () => Promise<T>): Promise<T>;
+export declare function indexingClientFor(account: GscAccount): indexing_v3.Indexing;
+/**
+ * Accounts fuer eine einzelne URL: zuerst die, die eine passende Property als Inhaber
+ * fuehren (nur das akzeptiert die Indexing API), dann die mit anderer Berechtigung auf
+ * einer passenden Property, dann der Rest - jeweils in Vorzugsreihenfolge.
+ */
+export declare function accountsForUrl(url: string): Promise<GscAccount[]>;
+/** Wie runWithAccountFallback, aber fuer eine URL (Indexing API). */
+export declare function runForUrl<T>(url: string, fn: () => Promise<T>): Promise<T>;
 /** Nur fuer Tests: sites.list ersetzen und Zwischenspeicher leeren. */
 export declare const _testing: {
     setSiteLister(fn: SiteLister | null): void;

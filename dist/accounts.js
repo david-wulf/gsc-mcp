@@ -48,9 +48,13 @@ exports.accountsFor = accountsFor;
 exports.isPermissionError = isPermissionError;
 exports.shortReason = shortReason;
 exports.runWithAccountFallback = runWithAccountFallback;
+exports.indexingClientFor = indexingClientFor;
+exports.accountsForUrl = accountsForUrl;
+exports.runForUrl = runForUrl;
 const googleapis_1 = require("googleapis");
 const fs = __importStar(require("fs"));
 const node_async_hooks_1 = require("node:async_hooks");
+const safe_fetch_js_1 = require("./safe-fetch.js");
 const INLINE_PREFIX = "GSC_SERVICE_ACCOUNT_JSON";
 const INLINE_VAR = /^GSC_SERVICE_ACCOUNT_JSON(_[A-Z0-9_]+)?$/;
 // sops (dotenv) und manche Secret-Manager machen aus dem "\n" im private_key echte
@@ -228,11 +232,11 @@ class AccountsExhaustedError extends Error {
     tried;
     status = 403;
     exhausted = true;
-    constructor(siteUrl, attempts) {
+    constructor(siteUrl, attempts, hint = "Add one of these accounts as a user of the property in Search Console " +
+        "(list_properties shows what each account can see).") {
         super(`No configured service account has access to ${siteUrl ?? "this property"}. Tried: ` +
             attempts.map((a) => `${a.email} (${shortReason(a.error)})`).join("; ") +
-            `. Add one of these accounts as a user of the property in Search Console ` +
-            `(list_properties shows what each account can see).`);
+            `. ${hint}`);
         this.name = "AccountsExhaustedError";
         this.tried = attempts.map((a) => a.email);
     }
@@ -252,7 +256,55 @@ function shortReason(err) {
  * ein einfacher Aufruf.
  */
 async function runWithAccountFallback(siteUrl, fn) {
-    const accounts = await accountsFor(siteUrl);
+    return tryAccounts(siteUrl, await accountsFor(siteUrl), fn);
+}
+// ---------------------------------------------------------------------------
+// Indexing API: URL-basiert, braucht den Account als Inhaber (siteOwner)
+const INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing";
+const indexingCache = new Map();
+function indexingClientFor(account) {
+    let client = indexingCache.get(account.email);
+    if (!client) {
+        const auth = new googleapis_1.google.auth.GoogleAuth({ credentials: account.credentials, scopes: [INDEXING_SCOPE] });
+        client = googleapis_1.google.indexing({ version: "v3", auth });
+        indexingCache.set(account.email, client);
+    }
+    return client;
+}
+/**
+ * Accounts fuer eine einzelne URL: zuerst die, die eine passende Property als Inhaber
+ * fuehren (nur das akzeptiert die Indexing API), dann die mit anderer Berechtigung auf
+ * einer passenden Property, dann der Rest - jeweils in Vorzugsreihenfolge.
+ */
+async function accountsForUrl(url) {
+    const accounts = getServiceAccounts();
+    if (accounts.length <= 1)
+        return accounts;
+    let host;
+    try {
+        host = new URL(url).hostname;
+    }
+    catch {
+        return accounts;
+    }
+    const rank = new Map();
+    await Promise.all(accounts.map(async (acc) => {
+        try {
+            const matching = (await sitesOf(acc)).filter((s) => (0, safe_fetch_js_1.hostMatchesProperties)(host, [s.siteUrl]));
+            rank.set(acc, matching.some((s) => s.permissionLevel === "siteOwner") ? 0 : matching.length > 0 ? 1 : 2);
+        }
+        catch {
+            rank.set(acc, 2);
+        }
+    }));
+    return [...accounts].sort((a, b) => (rank.get(a) ?? 2) - (rank.get(b) ?? 2));
+}
+/** Wie runWithAccountFallback, aber fuer eine URL (Indexing API). */
+async function runForUrl(url, fn) {
+    return tryAccounts(url, await accountsForUrl(url), fn, "The Indexing API needs the account as Owner of a property covering the URL (Full user is not " +
+        "enough) and the Web Search Indexing API enabled in the account's Cloud project.");
+}
+async function tryAccounts(label, accounts, fn, hint) {
     if (accounts.length === 0)
         return fn();
     if (accounts.length === 1)
@@ -268,7 +320,7 @@ async function runWithAccountFallback(siteUrl, fn) {
             attempts.push({ email: acc.email, error: err });
         }
     }
-    throw new AccountsExhaustedError(siteUrl, attempts);
+    throw new AccountsExhaustedError(label, attempts, hint);
 }
 /** Nur fuer Tests: sites.list ersetzen und Zwischenspeicher leeren. */
 exports._testing = {
@@ -280,5 +332,6 @@ exports._testing = {
         accountCache = accounts;
         sitesCache.clear();
         clientCache.clear();
+        indexingCache.clear();
     },
 };

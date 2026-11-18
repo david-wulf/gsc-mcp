@@ -48,7 +48,7 @@ const genai_conversation_queries_js_1 = require("./tools/genai-conversation-quer
 const image_page_audit_js_1 = require("./tools/image-page-audit.js");
 const server = new mcp_js_1.McpServer({
     name: "gsc-mcp",
-    version: "2.9.0",
+    version: "2.9.1",
 });
 // Property pro Aufruf: Jedes Tool, das eine GSC-Property abfragt, bekommt den
 // optionalen Parameter `site_url`. Der Wrapper setzt ihn per withSiteUrl() fuer
@@ -61,7 +61,7 @@ const SITE_URL_PARAM = zod_1.z
     .describe("GSC property for this call, e.g. sc-domain:example.com or https://www.example.com/. " +
     "Omit to use this instance's default property (GSC_SITE_URL). One of the configured service accounts must have access to it.");
 const NO_PROPERTY_TOOLS = new Set([
-    "multi_site_dashboard", "submit_url", "submit_batch", "image_page_audit", "list_properties",
+    "multi_site_dashboard", "submit_url", "submit_batch", "indexing_status", "image_page_audit", "list_properties",
 ]);
 // Mehrere Service-Accounts: runForProperty() nimmt den bevorzugten Account mit Zugriff
 // auf die Property und wiederholt den ganzen Aufruf mit dem naechsten, wenn Google 403
@@ -399,6 +399,19 @@ server.registerTool("submit_batch", {
     const results = await (0, submit_url_js_1.submitBatch)(urls, action);
     return {
         content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+    };
+});
+// 18b. Indexing status (read-only)
+server.registerTool("indexing_status", {
+    description: (0, tool_hints_js_1.describe)("indexing_status", "Read-only: the last notifications Google has on record for a URL via the Indexing API (urlNotifications.getMetadata). Also checks, without submitting anything, that a configured service account is Owner of a property covering the URL and the Indexing API is enabled."),
+    inputSchema: {
+        url: zod_1.z.string().describe("The full URL to look up"),
+    },
+}, async ({ url }) => {
+    const results = await (0, submit_url_js_1.indexingStatus)(url);
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "indexing_status", { url }, "Google Indexing API (live data)");
+    return {
+        content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };
 });
 // 19. Submit Sitemap

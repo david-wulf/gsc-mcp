@@ -12,6 +12,8 @@ import {
   isPermissionError,
   currentAccount,
   AccountsExhaustedError,
+  accountsForUrl,
+  runForUrl,
   _testing,
 } from "../dist/accounts.js";
 
@@ -149,4 +151,34 @@ test("runWithAccountFallback: nested fallback (sitemap variants) does not multip
     )
   );
   assert.equal(calls, 2);
+});
+
+test("accountsForUrl: owner of a covering property first, then other access, then the rest", async () => {
+  const third = "dritter@x.iam.gserviceaccount.com";
+  _testing.setAccounts([acc(third), acc(OLD), acc(NEW)]);
+  _testing.setSiteLister(async (a) => {
+    if (a.email === NEW) return [{ siteUrl: "sc-domain:davidwulf.de", permissionLevel: "siteOwner" }];
+    if (a.email === OLD) return [{ siteUrl: "sc-domain:davidwulf.de", permissionLevel: "siteFullUser" }];
+    return [{ siteUrl: "sc-domain:example.com", permissionLevel: "siteOwner" }];
+  });
+  assert.deepEqual(
+    (await accountsForUrl("https://www.davidwulf.de/kontakt/")).map((a) => a.email),
+    [NEW, OLD, third]
+  );
+  // not a URL: preference order unchanged
+  assert.deepEqual((await accountsForUrl("kein url")).map((a) => a.email), [third, OLD, NEW]);
+});
+
+test("runForUrl: falls back on 403 and names the owner requirement when all refuse", async () => {
+  _testing.setAccounts([acc(NEW), acc(OLD)]);
+  _testing.setSiteLister(async () => []);
+  const seen = [];
+  await assert.rejects(
+    runForUrl("https://davidwulf.de/", async () => {
+      seen.push(currentAccount().email);
+      throw forbidden("Permission denied. Failed to verify the URL ownership.");
+    }),
+    (err) => err.message.includes("Owner") && err.message.includes(NEW) && err.message.includes(OLD)
+  );
+  assert.deepEqual(seen, [NEW, OLD]);
 });

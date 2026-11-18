@@ -1,34 +1,38 @@
-import { google } from "googleapis";
+import { google, indexing_v3 } from "googleapis";
 import { getAuthMode } from "../auth.js";
 import { authenticateWithOAuth, getScopeTier } from "../oauth.js";
-import * as fs from "fs";
+import { currentAccount, indexingClientFor, runForUrl } from "../accounts.js";
 
-async function getIndexingClient() {
-  const mode = getAuthMode();
-
-  if (mode === "oauth" && getScopeTier() === "readonly") {
-    throw new Error(
-      "URL submission needs full access, but this install is in read only mode (GSC_SCOPES=readonly). " +
-      "Re-run `npx suganthan-gsc-mcp setup --reauth` and choose full access, then try again."
-    );
-  }
-
-  if (mode === "oauth") {
-    const oauth2Client = await authenticateWithOAuth();
-    google.options({ auth: oauth2Client });
-  } else {
-    const keyFile = process.env.GSC_KEY_FILE;
-    if (!keyFile || !fs.existsSync(keyFile)) {
-      throw new Error("GSC_KEY_FILE is required for indexing API in service_account mode.");
+/**
+ * Indexing API. Im Service-Account-Modus dieselbe Schluesselquelle wie die uebrigen
+ * Werkzeuge (GSC_SERVICE_ACCOUNT_JSON, GSC_SERVICE_ACCOUNT_JSON_<NAME>, ersatzweise
+ * GSC_KEY_FILE) und dieselbe Rueckfall-Logik: je URL zuerst der Account, der eine passende
+ * Property als Inhaber fuehrt; bei 403 der naechste (accounts.ts, runForUrl).
+ * Bis v2.9.0 las dieser Weg nur GSC_KEY_FILE und scheiterte im Gateway immer.
+ */
+async function withIndexingClient<T>(
+  url: string,
+  fn: (client: indexing_v3.Indexing) => Promise<T>
+): Promise<T> {
+  if (getAuthMode() === "oauth") {
+    if (getScopeTier() === "readonly") {
+      throw new Error(
+        "URL submission needs full access, but this install is in read only mode (GSC_SCOPES=readonly). " +
+        "Re-run `npx suganthan-gsc-mcp setup --reauth` and choose full access, then try again."
+      );
     }
-    const auth = new google.auth.GoogleAuth({
-      keyFile,
-      scopes: ["https://www.googleapis.com/auth/indexing"],
-    });
-    google.options({ auth });
+    const oauth2Client = await authenticateWithOAuth();
+    return fn(google.indexing({ version: "v3", auth: oauth2Client }));
   }
-
-  return google.indexing("v3");
+  return runForUrl(url, () => {
+    const account = currentAccount();
+    if (!account) {
+      throw new Error(
+        "No service account configured for the Indexing API (GSC_SERVICE_ACCOUNT_JSON or GSC_KEY_FILE)."
+      );
+    }
+    return fn(indexingClientFor(account));
+  });
 }
 
 interface SubmitResult {
@@ -38,6 +42,7 @@ interface SubmitResult {
   success: boolean;
   error: string | null;
   note: string;
+  account?: string;
 }
 
 export async function submitUrl(
@@ -45,13 +50,10 @@ export async function submitUrl(
   action: "URL_UPDATED" | "URL_DELETED" = "URL_UPDATED"
 ): Promise<SubmitResult> {
   try {
-    const indexing = await getIndexingClient();
-
-    const response = await indexing.urlNotifications.publish({
-      requestBody: {
-        url,
-        type: action,
-      },
+    let account: string | undefined;
+    const response = await withIndexingClient(url, (indexing) => {
+      account = currentAccount()?.email;
+      return indexing.urlNotifications.publish({ requestBody: { url, type: action } });
     });
 
     return {
@@ -62,6 +64,7 @@ export async function submitUrl(
       error: null,
       note:
         "Google has been notified. The Indexing API officially supports JobPosting and BroadcastEvent schema types, but processes requests for all page types. Priority is not guaranteed for non-job pages.",
+      ...(account && { account }),
     };
   } catch (err: any) {
     return {
@@ -71,7 +74,7 @@ export async function submitUrl(
       success: false,
       error: err.message || String(err),
       note:
-        "Submission failed. Ensure the Indexing API is enabled in your Google Cloud project and the service account has owner access in Search Console.",
+        "Submission failed. The service account must be an Owner of a Search Console property covering the URL (Full user is not enough), and the Web Search Indexing API must be enabled in its Google Cloud project.",
     };
   }
 }
@@ -109,5 +112,35 @@ export async function submitBatch(
       failed,
       note: `Daily quota is 200 URL notifications. ${succeeded} submitted successfully, ${failed} failed.`,
     },
+  };
+}
+
+/**
+ * Lesend: letzte Meldungen dieser URL an die Indexing API (urlNotifications.getMetadata).
+ * Prueft zugleich Inhaberrecht und API-Freischaltung, ohne etwas einzureichen. 404 heisst:
+ * die URL wurde noch nie gemeldet - kein Fehler.
+ */
+export async function indexingStatus(url: string) {
+  let account: string | undefined;
+  const data = await withIndexingClient(url, async (indexing) => {
+    account = currentAccount()?.email;
+    try {
+      const res = await indexing.urlNotifications.getMetadata({ url });
+      return res.data;
+    } catch (err: any) {
+      if (Number(err?.code ?? err?.status ?? err?.response?.status) === 404) return null;
+      throw err;
+    }
+  });
+  return {
+    url,
+    ...(account && { account }),
+    notified: data !== null,
+    latestUpdate: data?.latestUpdate ?? null,
+    latestRemove: data?.latestRemove ?? null,
+    note:
+      data === null
+        ? "Access works, but Google has no Indexing API notification on record for this URL."
+        : "Last notifications Google has on record for this URL via the Indexing API.",
   };
 }

@@ -1,75 +1,42 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.submitUrl = submitUrl;
 exports.submitBatch = submitBatch;
+exports.indexingStatus = indexingStatus;
 const googleapis_1 = require("googleapis");
 const auth_js_1 = require("../auth.js");
 const oauth_js_1 = require("../oauth.js");
-const fs = __importStar(require("fs"));
-async function getIndexingClient() {
-    const mode = (0, auth_js_1.getAuthMode)();
-    if (mode === "oauth" && (0, oauth_js_1.getScopeTier)() === "readonly") {
-        throw new Error("URL submission needs full access, but this install is in read only mode (GSC_SCOPES=readonly). " +
-            "Re-run `npx suganthan-gsc-mcp setup --reauth` and choose full access, then try again.");
-    }
-    if (mode === "oauth") {
-        const oauth2Client = await (0, oauth_js_1.authenticateWithOAuth)();
-        googleapis_1.google.options({ auth: oauth2Client });
-    }
-    else {
-        const keyFile = process.env.GSC_KEY_FILE;
-        if (!keyFile || !fs.existsSync(keyFile)) {
-            throw new Error("GSC_KEY_FILE is required for indexing API in service_account mode.");
+const accounts_js_1 = require("../accounts.js");
+/**
+ * Indexing API. Im Service-Account-Modus dieselbe Schluesselquelle wie die uebrigen
+ * Werkzeuge (GSC_SERVICE_ACCOUNT_JSON, GSC_SERVICE_ACCOUNT_JSON_<NAME>, ersatzweise
+ * GSC_KEY_FILE) und dieselbe Rueckfall-Logik: je URL zuerst der Account, der eine passende
+ * Property als Inhaber fuehrt; bei 403 der naechste (accounts.ts, runForUrl).
+ * Bis v2.9.0 las dieser Weg nur GSC_KEY_FILE und scheiterte im Gateway immer.
+ */
+async function withIndexingClient(url, fn) {
+    if ((0, auth_js_1.getAuthMode)() === "oauth") {
+        if ((0, oauth_js_1.getScopeTier)() === "readonly") {
+            throw new Error("URL submission needs full access, but this install is in read only mode (GSC_SCOPES=readonly). " +
+                "Re-run `npx suganthan-gsc-mcp setup --reauth` and choose full access, then try again.");
         }
-        const auth = new googleapis_1.google.auth.GoogleAuth({
-            keyFile,
-            scopes: ["https://www.googleapis.com/auth/indexing"],
-        });
-        googleapis_1.google.options({ auth });
+        const oauth2Client = await (0, oauth_js_1.authenticateWithOAuth)();
+        return fn(googleapis_1.google.indexing({ version: "v3", auth: oauth2Client }));
     }
-    return googleapis_1.google.indexing("v3");
+    return (0, accounts_js_1.runForUrl)(url, () => {
+        const account = (0, accounts_js_1.currentAccount)();
+        if (!account) {
+            throw new Error("No service account configured for the Indexing API (GSC_SERVICE_ACCOUNT_JSON or GSC_KEY_FILE).");
+        }
+        return fn((0, accounts_js_1.indexingClientFor)(account));
+    });
 }
 async function submitUrl(url, action = "URL_UPDATED") {
     try {
-        const indexing = await getIndexingClient();
-        const response = await indexing.urlNotifications.publish({
-            requestBody: {
-                url,
-                type: action,
-            },
+        let account;
+        const response = await withIndexingClient(url, (indexing) => {
+            account = (0, accounts_js_1.currentAccount)()?.email;
+            return indexing.urlNotifications.publish({ requestBody: { url, type: action } });
         });
         return {
             url,
@@ -78,6 +45,7 @@ async function submitUrl(url, action = "URL_UPDATED") {
             success: true,
             error: null,
             note: "Google has been notified. The Indexing API officially supports JobPosting and BroadcastEvent schema types, but processes requests for all page types. Priority is not guaranteed for non-job pages.",
+            ...(account && { account }),
         };
     }
     catch (err) {
@@ -87,7 +55,7 @@ async function submitUrl(url, action = "URL_UPDATED") {
             notifyTime: null,
             success: false,
             error: err.message || String(err),
-            note: "Submission failed. Ensure the Indexing API is enabled in your Google Cloud project and the service account has owner access in Search Console.",
+            note: "Submission failed. The service account must be an Owner of a Search Console property covering the URL (Full user is not enough), and the Web Search Indexing API must be enabled in its Google Cloud project.",
         };
     }
 }
@@ -114,5 +82,35 @@ async function submitBatch(urls, action = "URL_UPDATED") {
             failed,
             note: `Daily quota is 200 URL notifications. ${succeeded} submitted successfully, ${failed} failed.`,
         },
+    };
+}
+/**
+ * Lesend: letzte Meldungen dieser URL an die Indexing API (urlNotifications.getMetadata).
+ * Prueft zugleich Inhaberrecht und API-Freischaltung, ohne etwas einzureichen. 404 heisst:
+ * die URL wurde noch nie gemeldet - kein Fehler.
+ */
+async function indexingStatus(url) {
+    let account;
+    const data = await withIndexingClient(url, async (indexing) => {
+        account = (0, accounts_js_1.currentAccount)()?.email;
+        try {
+            const res = await indexing.urlNotifications.getMetadata({ url });
+            return res.data;
+        }
+        catch (err) {
+            if (Number(err?.code ?? err?.status ?? err?.response?.status) === 404)
+                return null;
+            throw err;
+        }
+    });
+    return {
+        url,
+        ...(account && { account }),
+        notified: data !== null,
+        latestUpdate: data?.latestUpdate ?? null,
+        latestRemove: data?.latestRemove ?? null,
+        note: data === null
+            ? "Access works, but Google has no Indexing API notification on record for this URL."
+            : "Last notifications Google has on record for this URL via the Indexing API.",
     };
 }
