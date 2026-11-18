@@ -38,11 +38,18 @@ exports.withSiteUrl = withSiteUrl;
 exports.currentSiteUrl = currentSiteUrl;
 exports.getConfig = getConfig;
 exports.getSearchConsoleClient = getSearchConsoleClient;
+exports.runForProperty = runForProperty;
+exports.listPropertiesPerAccount = listPropertiesPerAccount;
+exports.allAccessibleSiteUrls = allAccessibleSiteUrls;
 const googleapis_1 = require("googleapis");
 const fs = __importStar(require("fs"));
 const node_async_hooks_1 = require("node:async_hooks");
 const oauth_js_1 = require("./oauth.js");
-let cachedClient = null;
+const accounts_js_1 = require("./accounts.js");
+let cachedOAuthClient = null;
+// Same scope set as the OAuth flow, including auth/indexing on the full
+// tier so submit_url / submit_batch work in service-account mode too (#2).
+(0, accounts_js_1.setScopeProvider)(() => (0, oauth_js_1.scopesForTier)((0, oauth_js_1.getScopeTier)()));
 function getAuthMode() {
     const mode = process.env.GSC_AUTH_MODE?.toLowerCase();
     if (mode === "oauth")
@@ -76,24 +83,30 @@ function getConfig() {
             : [];
     if (mode === "service_account") {
         const keyFile = process.env.GSC_KEY_FILE;
-        // GSC_SERVICE_ACCOUNT_JSON haelt den kompletten Schluessel als Zeichenkette.
-        // Damit kann ein Secret-Manager (Infisical) ihn zur Laufzeit einspeisen, ohne
-        // dass der Private Key je auf die Platte muss. Hat Vorrang vor GSC_KEY_FILE.
-        const inlineJson = process.env.GSC_SERVICE_ACCOUNT_JSON;
-        if (!keyFile && !inlineJson) {
+        // GSC_SERVICE_ACCOUNT_JSON (und GSC_SERVICE_ACCOUNT_JSON_<NAME> fuer weitere
+        // Accounts) haelt den kompletten Schluessel als Zeichenkette. Damit kann ein
+        // Secret-Manager (Infisical) ihn zur Laufzeit einspeisen, ohne dass der Private Key
+        // je auf die Platte muss. Hat Vorrang vor GSC_KEY_FILE. Siehe accounts.ts.
+        const inline = (0, accounts_js_1.inlineAccountVars)().length > 0;
+        if (!(0, accounts_js_1.hasServiceAccountSource)()) {
             throw new Error("Either GSC_SERVICE_ACCOUNT_JSON or GSC_KEY_FILE is required in " +
                 "service_account mode. Set GSC_SERVICE_ACCOUNT_JSON to the contents of " +
-                "your service account JSON key, or GSC_KEY_FILE to its path, " +
-                "or switch to OAuth by setting GSC_AUTH_MODE=oauth.");
+                "your service account JSON key (more accounts: GSC_SERVICE_ACCOUNT_JSON_<NAME>), " +
+                "or GSC_KEY_FILE to its path, or switch to OAuth by setting GSC_AUTH_MODE=oauth.");
         }
         if (!siteUrl && siteUrls.length === 0) {
             throw new Error("GSC_SITE_URL environment variable is required. " +
                 "Set it to your GSC property URL (e.g. https://yoursite.com/ or sc-domain:yoursite.com).");
         }
-        if (!inlineJson && keyFile && !fs.existsSync(keyFile)) {
+        if (!inline && keyFile && !fs.existsSync(keyFile)) {
             throw new Error(`Service account key file not found at: ${keyFile}`);
         }
-        return { keyFile, inlineJson, siteUrl: siteUrl || siteUrls[0], siteUrls };
+        return {
+            keyFile,
+            inlineJson: process.env.GSC_SERVICE_ACCOUNT_JSON,
+            siteUrl: siteUrl || siteUrls[0],
+            siteUrls,
+        };
     }
     // OAuth mode
     if (!siteUrl && siteUrls.length === 0) {
@@ -102,48 +115,74 @@ function getConfig() {
     }
     return { keyFile: undefined, inlineJson: undefined, siteUrl: siteUrl || siteUrls[0], siteUrls };
 }
-// sops (dotenv) und manche Secret-Manager machen aus dem "\n" im private_key echte
-// Zeilenumbrueche - dann ist der Schluessel kein gueltiges JSON mehr ("Bad control
-// character"). Der Wert kommt einzeilig an, echte Umbrueche koennen also nur aus diesen
-// Escapes stammen: zurueckverwandeln und erneut parsen.
-function parseServiceAccountJson(raw) {
-    try {
-        return JSON.parse(raw);
-    }
-    catch (error) {
-        try {
-            return JSON.parse(raw.replace(/\r?\n/g, "\\n"));
-        }
-        catch {
-            throw error;
-        }
-    }
-}
-async function getServiceAccountClient() {
-    const { keyFile, inlineJson } = getConfig();
-    // Same scope set as the OAuth flow, including auth/indexing on the full
-    // tier so submit_url / submit_batch work in service-account mode too (#2).
-    const scopes = (0, oauth_js_1.scopesForTier)((0, oauth_js_1.getScopeTier)());
-    const auth = inlineJson
-        ? new googleapis_1.google.auth.GoogleAuth({ credentials: parseServiceAccountJson(inlineJson), scopes })
-        : new googleapis_1.google.auth.GoogleAuth({ keyFile, scopes });
-    googleapis_1.google.options({ auth });
-    return googleapis_1.google.searchconsole("v1");
-}
 async function getOAuthClient() {
     const oauth2Client = await (0, oauth_js_1.authenticateWithOAuth)();
     googleapis_1.google.options({ auth: oauth2Client });
     return googleapis_1.google.searchconsole("v1");
 }
+/**
+ * Client fuer den laufenden Aufruf. Im Service-Account-Modus der Account aus dem
+ * Aufruf-Kontext (runForProperty setzt ihn, mit 403-Fallback); ohne Kontext der
+ * bevorzugte Account, der die aktuelle Property in sites.list fuehrt.
+ */
 async function getSearchConsoleClient() {
-    if (cachedClient)
-        return cachedClient;
-    const mode = getAuthMode();
-    if (mode === "oauth") {
-        cachedClient = await getOAuthClient();
+    if (getAuthMode() === "oauth") {
+        if (!cachedOAuthClient)
+            cachedOAuthClient = await getOAuthClient();
+        return cachedOAuthClient;
     }
-    else {
-        cachedClient = await getServiceAccountClient();
+    getConfig(); // gleiche Pruefungen und Meldungen wie bisher
+    const forced = (0, accounts_js_1.currentAccount)();
+    if (forced)
+        return (0, accounts_js_1.clientFor)(forced);
+    const [account] = await (0, accounts_js_1.accountsFor)(currentSiteUrl());
+    if (!account) {
+        throw new Error("No service account configured (GSC_SERVICE_ACCOUNT_JSON / GSC_KEY_FILE).");
     }
-    return cachedClient;
+    return (0, accounts_js_1.clientFor)(account);
+}
+/**
+ * Fuehrt einen Aufruf gegen eine Property aus und wechselt bei 403 den Service-Account.
+ * Im OAuth-Modus gibt es nur die eine Anmeldung, dann ist das ein einfacher Aufruf.
+ */
+function runForProperty(siteUrl, fn) {
+    if (getAuthMode() === "oauth")
+        return fn();
+    return (0, accounts_js_1.runWithAccountFallback)(siteUrl, fn);
+}
+/** Je Account die Properties aus sites.list (frisch abgerufen). Nur client_email, nie Schluessel. */
+async function listPropertiesPerAccount() {
+    if (getAuthMode() === "oauth") {
+        const sc = await getSearchConsoleClient();
+        const res = await sc.sites.list({});
+        return [{
+                account: "oauth",
+                source: "GSC_AUTH_MODE=oauth",
+                preference: 1,
+                properties: (res.data.siteEntry ?? [])
+                    .filter((e) => Boolean(e.siteUrl))
+                    .map((e) => ({ siteUrl: e.siteUrl, permissionLevel: e.permissionLevel ?? null })),
+                error: null,
+            }];
+    }
+    const accounts = (0, accounts_js_1.getServiceAccounts)();
+    return Promise.all(accounts.map(async (acc, i) => {
+        try {
+            const properties = await (0, accounts_js_1.sitesOf)(acc, true);
+            return { account: acc.email, source: acc.source, preference: i + 1, properties, error: null };
+        }
+        catch (err) {
+            return { account: acc.email, source: acc.source, preference: i + 1, properties: [], error: (0, accounts_js_1.shortReason)(err) };
+        }
+    }));
+}
+/** Alle Properties, die irgendein konfigurierter Account sieht (zwischengespeichert). */
+async function allAccessibleSiteUrls() {
+    if (getAuthMode() === "oauth") {
+        const sc = await getSearchConsoleClient();
+        const res = await sc.sites.list({});
+        return (res.data.siteEntry ?? []).map((e) => e.siteUrl).filter((u) => Boolean(u));
+    }
+    const lists = await Promise.all((0, accounts_js_1.getServiceAccounts)().map((acc) => (0, accounts_js_1.sitesOf)(acc).catch(() => [])));
+    return [...new Set(lists.flat().map((s) => s.siteUrl))];
 }

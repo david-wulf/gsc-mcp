@@ -130,11 +130,8 @@ async function auditableProperties() {
     }
     if (!propertyCache || Date.now() - propertyCache.at > PROPERTY_CACHE_MS) {
         try {
-            const sc = await (0, auth_js_1.getSearchConsoleClient)();
-            const res = await sc.sites.list({});
-            const listed = (res.data.siteEntry ?? [])
-                .map((entry) => entry.siteUrl)
-                .filter((url) => Boolean(url));
+            // Vereinigung ueber alle konfigurierten Service-Accounts (bzw. die OAuth-Anmeldung).
+            const listed = await (0, auth_js_1.allAccessibleSiteUrls)();
             propertyCache = { at: Date.now(), siteUrls: listed };
         }
         catch {

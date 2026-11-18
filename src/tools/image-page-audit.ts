@@ -1,7 +1,7 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import { imageSize } from "image-size";
 import exifr from "exifr";
-import { getConfig, getSearchConsoleClient } from "../auth.js";
+import { allAccessibleSiteUrls, getConfig } from "../auth.js";
 import {
   FetchBlockedError,
   hostMatchesProperties,
@@ -191,11 +191,8 @@ async function auditableProperties(): Promise<string[]> {
   }
   if (!propertyCache || Date.now() - propertyCache.at > PROPERTY_CACHE_MS) {
     try {
-      const sc = await getSearchConsoleClient();
-      const res = await sc.sites.list({});
-      const listed = (res.data.siteEntry ?? [])
-        .map((entry) => entry.siteUrl)
-        .filter((url): url is string => Boolean(url));
+      // Vereinigung ueber alle konfigurierten Service-Accounts (bzw. die OAuth-Anmeldung).
+      const listed = await allAccessibleSiteUrls();
       propertyCache = { at: Date.now(), siteUrls: listed };
     } catch {
       // Fall back to the configured properties; do not cache the failure.

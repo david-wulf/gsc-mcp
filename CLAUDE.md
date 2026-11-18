@@ -1,12 +1,12 @@
 # CLAUDE.md — Suganthans-GSC-MCP
 
 ## Zweck
-MCP-Server für die Google Search Console API (Search Analytics, URL Inspection, Sitemaps, Indexing API) mit 34 SEO-Analyse-Tools. Fork von `Suganthan-Mohanadasan/Suganthans-GSC-MCP` (Basis v2.5.1), Fork-Version 2.8.0; läuft bei David je Property als eigene Server-Instanz.
+MCP-Server für die Google Search Console API (Search Analytics, URL Inspection, Sitemaps, Indexing API) mit 35 SEO-Analyse-Tools. Fork von `Suganthan-Mohanadasan/Suganthans-GSC-MCP` (Basis v2.5.1), Fork-Version 2.9.0; läuft bei David je Property als eigene Server-Instanz.
 
 ## Aufbau
 - Einstieg: `src/index.ts` — `McpServer`, alle Tools per `server.registerTool()`; `node dist/index.js setup` startet den OAuth-Einrichtungsassistenten (`src/setup.ts`)
 - Tool-Logik: je Tool eine Datei in `src/tools/`
-- `src/auth.ts` (Service Account / OAuth, `getConfig()`), `src/oauth.ts`, `src/analytics.ts` (Search-Analytics-Abfragen), `src/inspection.ts`, `src/guardrails.ts` (`GUARDRAIL_SUFFIX`, `VISUAL_SUFFIX`, `POSITION_CAVEAT`, `withMeta()`), `src/tool-hints.ts` (`TOOL_HINTS`, `VISUAL_TOOLS`, `POSITION_TOOLS`, `describe()`)
+- `src/auth.ts` (Service Account / OAuth, `getConfig()`, `getSearchConsoleClient()`, `runForProperty()`), `src/accounts.ts` (mehrere Service-Accounts seit v2.9.0: Laden und Reihenfolge, Client je Account, Account je Aufruf per `AsyncLocalStorage`, Auswahl über `sites.list`, 403-Fallback), `src/oauth.ts`, `src/analytics.ts` (Search-Analytics-Abfragen), `src/inspection.ts`, `src/guardrails.ts` (`GUARDRAIL_SUFFIX`, `VISUAL_SUFFIX`, `POSITION_CAVEAT`, `withMeta()`), `src/tool-hints.ts` (`TOOL_HINTS`, `VISUAL_TOOLS`, `POSITION_TOOLS`, `describe()`)
 - **Beschreibungen (seit 2026-11-05):** jede beginnt mit einer Zeile „Typische Fragen" (deutsch, mit englischen Stichworten), danach die Funktion. Die Verhaltensregeln (keine Spekulation, Darstellung, Positions-Hinweis) stehen nicht mehr in der Beschreibung, sondern kommen über `withMeta()` in `_meta.note`, `_meta.presentation` und `_meta.position` jeder Antwort. Grund: kürzere Beschreibungen (Mittel 1.170 → 400 Zeichen) und bessere Treffer der Werkzeugsuche im LiteLLM-Gateway (Messung: 18 → 21 von 24 Testanfragen unter den ersten drei)
 - Herkunft/Git:
   - Remotes: `origin` = `david-wulf/gsc-mcp`, `upstream` und `sug` = beide Suganthan (doppelt), dazu ein privater Spiegel (`git remote -v`)
@@ -14,7 +14,7 @@ MCP-Server für die Google Search Console API (Search Analytics, URL Inspection,
   - Upstream ziehen: `git fetch upstream && git merge upstream/main` (Muster: `0e331e5` „Merge upstream v2.5.1 into the fork"), danach README-Fork-Hinweis und `package.json`-Version nachziehen. Beiträge an Upstream laufen als PR von `david-wulf` (vgl. Merge PR #1)
 
 ## Tools
-- Lesend: `quick_wins`, `ctr_opportunities`, `traffic_drops`, `content_gaps`, `site_snapshot`, `inspect_url`, `cannibalization_check`, `content_decay`, `topic_cluster_performance`, `ctr_vs_benchmark`, `verify_claim`, `advanced_search_analytics`, `check_alerts`, `content_recommendations`, `generate_report`, `multi_site_dashboard`, `list_sitemaps`, `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`, `branded_analysis`, `genai_conversation_queries`, `image_keyword_overview`, `image_search_quick_wins`, `compare_web_vs_image`, `image_pages_overview`, `image_keyword_trends`, `image_impressions_no_clicks`, `image_content_decay`, `image_page_audit` (holt zusätzlich die Seite — nur Hosts von Properties des Kontos, keine internen Adressen, über `src/safe-fetch.ts`)
+- Lesend: `quick_wins`, `ctr_opportunities`, `traffic_drops`, `content_gaps`, `site_snapshot`, `inspect_url`, `cannibalization_check`, `content_decay`, `topic_cluster_performance`, `ctr_vs_benchmark`, `verify_claim`, `advanced_search_analytics`, `check_alerts`, `content_recommendations`, `generate_report`, `multi_site_dashboard`, `list_sitemaps`, `list_properties` (je Account die sichtbaren Properties, nur client_email), `discover_analysis`, `image_analysis`, `search_appearance`, `query_count`, `branded_analysis`, `genai_conversation_queries`, `image_keyword_overview`, `image_search_quick_wins`, `compare_web_vs_image`, `image_pages_overview`, `image_keyword_trends`, `image_impressions_no_clicks`, `image_content_decay`, `image_page_audit` (holt zusätzlich die Seite — nur Hosts von Properties des Kontos, keine internen Adressen, über `src/safe-fetch.ts`)
 - **Schreibend**: `submit_url`, `submit_batch` (Indexing API), `submit_sitemap` (Sitemap in GSC einreichen)
 
 ## Lokal starten & prüfen
@@ -31,12 +31,12 @@ npm start            # node dist/index.js
 - Ein Build wirkt auf alle Instanzen — nach `npm run build` Claude neu starten.
 
 ## Konfiguration
-`GSC_AUTH_MODE` (`service_account` Standard | `oauth`), `GSC_SITE_URL` bzw. `GSC_SITE_URLS`, `GSC_SERVICE_ACCOUNT_JSON` (Vorrang) oder `GSC_KEY_FILE`, für OAuth `GSC_OAUTH_CLIENT_ID`, `GSC_OAUTH_CLIENT_SECRET`, `GSC_OAUTH_SECRETS_FILE`, `GSC_SCOPES` (`readonly` sperrt Submit-Tools)
+`GSC_AUTH_MODE` (`service_account` Standard | `oauth`), `GSC_SITE_URL` bzw. `GSC_SITE_URLS`, `GSC_SERVICE_ACCOUNT_JSON` (Vorrang) oder `GSC_KEY_FILE`, weitere Accounts als `GSC_SERVICE_ACCOUNT_JSON_<NAME>` mit Vorzug über `GSC_ACCOUNT_ORDER` (client_email oder Teil vor dem `@`, kommagetrennt), für OAuth `GSC_OAUTH_CLIENT_ID`, `GSC_OAUTH_CLIENT_SECRET`, `GSC_OAUTH_SECRETS_FILE`, `GSC_SCOPES` (`readonly` sperrt Submit-Tools)
 
 ## Neues Tool hinzufügen
 1. `src/tools/<name>.ts` mit exportierter async-Funktion; Abfragen über `src/analytics.ts`, Auth über `auth.ts`
 2. In `src/index.ts` `server.registerTool("<name>", { description: describe("<name>", "…"), inputSchema: { … zod … } }, async (args) => …)`; den Suchhinweis („Typische Fragen: …") in `src/tool-hints.ts` unter `TOOL_HINTS` eintragen (`describe()` wirft sonst beim Start), bei Bedarf den Namen in `VISUAL_TOOLS`/`POSITION_TOOLS`; Ergebnis per `withMeta()` als JSON-Text (Muster: `query_count`)
-   `site_url` nicht selbst ins Schema schreiben — der Wrapper ergänzt ihn; Tools ohne Property-Bezug in `NO_PROPERTY_TOOLS` eintragen. Die Property immer über `getConfig().siteUrl` lesen, nie direkt aus `process.env`, und nie als Parameter durch Tool-Funktionen oder `fetchAllRows` reichen; für mehrere Properties in einem Aufruf `withSiteUrl()` (Muster: `multi-site-dashboard.ts`).
+   `site_url` nicht selbst ins Schema schreiben — der Wrapper ergänzt ihn und führt den Aufruf über `runForProperty()` aus (403 → nächster Service-Account); den Client immer über `getSearchConsoleClient()` holen, nie selbst `google.options()` setzen (globale Anmeldung würde den Account je Aufruf aushebeln); Tools ohne Property-Bezug in `NO_PROPERTY_TOOLS` eintragen. Die Property immer über `getConfig().siteUrl` lesen, nie direkt aus `process.env`, und nie als Parameter durch Tool-Funktionen oder `fetchAllRows` reichen; für mehrere Properties in einem Aufruf `withSiteUrl()` (Muster: `multi-site-dashboard.ts`).
 3. README-Tabelle „Only in this fork" und Tool-Zahl in `package.json`-`description` anpassen, `npm run build`
 
 ## Grenzen
@@ -46,3 +46,5 @@ npm start            # node dist/index.js
 ## Offen
 - `submit-url.ts` verlangt im Service-Account-Modus `GSC_KEY_FILE`; Instanzen nur mit `GSC_SERVICE_ACCOUNT_JSON` (Infisical-Weg) können damit vermutlich nicht einreichen — nicht geprüft.
 - Remotes `upstream` und `sug` zeigen auf dieselbe URL.
+- Mehrere Accounts gelten nicht für `submit_url`/`submit_batch` (Indexing API, eigener Weg über `GSC_KEY_FILE` in `submit-url.ts`).
+- Werkzeuge, die einen 403 intern abfangen statt ihn zu werfen, bekommen keinen Wiederholversuch; sie laufen nur über die Auswahl per `sites.list`.

@@ -48,7 +48,7 @@ const genai_conversation_queries_js_1 = require("./tools/genai-conversation-quer
 const image_page_audit_js_1 = require("./tools/image-page-audit.js");
 const server = new mcp_js_1.McpServer({
     name: "gsc-mcp",
-    version: "2.7.0",
+    version: "2.9.0",
 });
 // Property pro Aufruf: Jedes Tool, das eine GSC-Property abfragt, bekommt den
 // optionalen Parameter `site_url`. Der Wrapper setzt ihn per withSiteUrl() fuer
@@ -59,15 +59,20 @@ const SITE_URL_PARAM = zod_1.z
     .string()
     .optional()
     .describe("GSC property for this call, e.g. sc-domain:example.com or https://www.example.com/. " +
-    "Omit to use this instance's default property (GSC_SITE_URL). The service account must have access to it.");
-const NO_PROPERTY_TOOLS = new Set(["multi_site_dashboard", "submit_url", "submit_batch", "image_page_audit"]);
+    "Omit to use this instance's default property (GSC_SITE_URL). One of the configured service accounts must have access to it.");
+const NO_PROPERTY_TOOLS = new Set([
+    "multi_site_dashboard", "submit_url", "submit_batch", "image_page_audit", "list_properties",
+]);
+// Mehrere Service-Accounts: runForProperty() nimmt den bevorzugten Account mit Zugriff
+// auf die Property und wiederholt den ganzen Aufruf mit dem naechsten, wenn Google 403
+// meldet (accounts.ts). Ein 403 heisst, dass nichts gelesen oder geschrieben wurde.
 const registerToolOriginal = server.registerTool.bind(server);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 server.registerTool = (name, config, handler) => {
     if (NO_PROPERTY_TOOLS.has(name))
         return registerToolOriginal(name, config, handler);
     const inputSchema = { ...(config.inputSchema ?? {}), site_url: SITE_URL_PARAM };
-    const wrapped = (args, extra) => (0, auth_js_1.withSiteUrl)(args?.site_url, () => handler(args, extra));
+    const wrapped = (args, extra) => (0, auth_js_1.withSiteUrl)(args?.site_url, () => (0, auth_js_1.runForProperty)((0, auth_js_1.currentSiteUrl)(), async () => handler(args, extra)));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return registerToolOriginal(name, { ...config, inputSchema }, wrapped);
 };
@@ -415,6 +420,17 @@ server.registerTool("list_sitemaps", {
 }, async () => {
     const results = await (0, submit_sitemap_js_1.listSitemaps)();
     const wrapped = (0, guardrails_js_1.withMeta)(results, "list_sitemaps", {});
+    return {
+        content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
+    };
+});
+// 20b. List Properties (per account, diagnosis)
+server.registerTool("list_properties", {
+    description: (0, tool_hints_js_1.describe)("list_properties", "List every Search Console property each configured service account can see (sites.list), with its permission level, in the order the accounts are tried. Shows client_email only, never key data. Use it when a property returns a permission error."),
+    inputSchema: {},
+}, async () => {
+    const results = await (0, auth_js_1.listPropertiesPerAccount)();
+    const wrapped = (0, guardrails_js_1.withMeta)(results, "list_properties", {});
     return {
         content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
     };

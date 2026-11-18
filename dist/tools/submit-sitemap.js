@@ -44,14 +44,15 @@ async function submitSitemap(sitemapUrl) {
                 "Re-run `npx suganthan-gsc-mcp setup --reauth` and choose full access, then try again.",
         };
     }
-    const client = await (0, auth_js_1.getSearchConsoleClient)();
     const { siteUrl: configSiteUrl } = (0, auth_js_1.getConfig)();
     const candidates = sitemapPropertyCandidates(configSiteUrl);
+    // Je Variante alle Accounts (runForProperty), erst dann die naechste Variante:
+    // die genaue Property ueber irgendeinen Account schlaegt jede Ersatz-Variante.
     let firstError = null;
     for (const property of candidates) {
         const feedpath = sitemapUrl || defaultSitemapUrl(property);
         try {
-            await client.sitemaps.submit({ siteUrl: property, feedpath });
+            await (0, auth_js_1.runForProperty)(property, async () => (await (0, auth_js_1.getSearchConsoleClient)()).sitemaps.submit({ siteUrl: property, feedpath }));
             const note = fallbackNote(property, configSiteUrl);
             return {
                 siteUrl: property,
@@ -74,13 +75,12 @@ async function submitSitemap(sitemapUrl) {
     };
 }
 async function listSitemaps() {
-    const client = await (0, auth_js_1.getSearchConsoleClient)();
     const { siteUrl: configSiteUrl } = (0, auth_js_1.getConfig)();
     const candidates = sitemapPropertyCandidates(configSiteUrl);
     let firstError = null;
     for (const property of candidates) {
         try {
-            const response = await client.sitemaps.list({ siteUrl: property });
+            const response = await (0, auth_js_1.runForProperty)(property, async () => (await (0, auth_js_1.getSearchConsoleClient)()).sitemaps.list({ siteUrl: property }));
             const sitemaps = (response.data.sitemap || []).map((s) => ({
                 path: s.path || "",
                 lastSubmitted: s.lastSubmitted || null,
@@ -106,5 +106,6 @@ async function listSitemaps() {
                 firstError = err;
         }
     }
-    throw new Error((firstError?.message || String(firstError)) + permissionHint(candidates));
+    // exhausted: alle Accounts und Varianten sind durch, der Tool-Wrapper wiederholt nicht.
+    throw Object.assign(new Error((firstError?.message || String(firstError)) + permissionHint(candidates)), { exhausted: true });
 }

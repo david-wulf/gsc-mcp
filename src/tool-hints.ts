@@ -31,6 +31,7 @@ export const TOOL_HINTS: Record<string, string> = {
   submit_batch: "Typische Fragen: Viele URLs auf einmal zur Indexierung schicken, bis 200 je Tag (schreibend). Bulk indexing request.",
   submit_sitemap: "Typische Fragen: Eine Sitemap bei Google einreichen oder erneut melden (schreibend). Submit sitemap.",
   list_sitemaps: "Typische Fragen: Welche Sitemaps sind eingereicht, mit Fehlern, Warnungen und Zahl indexierter Seiten? Sitemap status.",
+  list_properties: "Typische Fragen: Welche Search-Console-Properties sind erreichbar, und über welchen Service-Account? Warum kommt bei einer Property ein Berechtigungsfehler (403)? Accessible sites, permissions, which account.",
   discover_analysis: "Typische Fragen: Wie läuft Google Discover: Feed-Traffic, beste Artikel, Länder, Verlauf? Discover performance.",
   image_analysis: "Typische Fragen: Wie schneidet die Website in der Google-Bildersuche insgesamt ab? Image search overview.",
   search_appearance: "Typische Fragen: Wie performen Darstellungsformen wie Rich Results, Händlereinträge, Produkt-Snippets oder Bewertungssterne? Rich result types, merchant listings.",

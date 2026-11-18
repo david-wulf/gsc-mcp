@@ -1,5 +1,5 @@
 import { fetchAllRows, getDateRange, getPriorDateRange } from "../analytics.js";
-import { getConfig, withSiteUrl } from "../auth.js";
+import { getConfig, runForProperty, withSiteUrl } from "../auth.js";
 
 interface SiteHealth {
   siteUrl: string;
@@ -26,10 +26,10 @@ async function siteSnapshotForUrl(
   const current = getDateRange(days);
   const prior = getPriorDateRange(days);
 
-  const [currentRows, priorRows] = await withSiteUrl(siteUrl, () => Promise.all([
+  const [currentRows, priorRows] = await withSiteUrl(siteUrl, () => runForProperty(siteUrl, () => Promise.all([
     fetchAllRows({ startDate: current.startDate, endDate: current.endDate, dimensions: ["date"] }),
     fetchAllRows({ startDate: prior.startDate, endDate: prior.endDate, dimensions: ["date"] }),
-  ]));
+  ])));
 
   const sum = (rows: typeof currentRows) => {
     let clicks = 0, impressions = 0, posWeight = 0;

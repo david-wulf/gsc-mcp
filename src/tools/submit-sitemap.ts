@@ -1,4 +1,4 @@
-import { getSearchConsoleClient, getConfig, getAuthMode } from "../auth.js";
+import { getSearchConsoleClient, getConfig, getAuthMode, runForProperty } from "../auth.js";
 import { getScopeTier } from "../oauth.js";
 
 interface SitemapSubmitResult {
@@ -72,15 +72,18 @@ export async function submitSitemap(sitemapUrl?: string): Promise<SitemapSubmitR
     };
   }
 
-  const client = await getSearchConsoleClient();
   const { siteUrl: configSiteUrl } = getConfig();
   const candidates = sitemapPropertyCandidates(configSiteUrl);
 
+  // Je Variante alle Accounts (runForProperty), erst dann die naechste Variante:
+  // die genaue Property ueber irgendeinen Account schlaegt jede Ersatz-Variante.
   let firstError: any = null;
   for (const property of candidates) {
     const feedpath = sitemapUrl || defaultSitemapUrl(property);
     try {
-      await client.sitemaps.submit({ siteUrl: property, feedpath });
+      await runForProperty(property, async () =>
+        (await getSearchConsoleClient()).sitemaps.submit({ siteUrl: property, feedpath })
+      );
       const note = fallbackNote(property, configSiteUrl);
       return {
         siteUrl: property,
@@ -103,14 +106,15 @@ export async function submitSitemap(sitemapUrl?: string): Promise<SitemapSubmitR
 }
 
 export async function listSitemaps(): Promise<SitemapListResult> {
-  const client = await getSearchConsoleClient();
   const { siteUrl: configSiteUrl } = getConfig();
   const candidates = sitemapPropertyCandidates(configSiteUrl);
 
   let firstError: any = null;
   for (const property of candidates) {
     try {
-      const response = await client.sitemaps.list({ siteUrl: property });
+      const response = await runForProperty(property, async () =>
+        (await getSearchConsoleClient()).sitemaps.list({ siteUrl: property })
+      );
 
       const sitemaps = (response.data.sitemap || []).map((s) => ({
         path: s.path || "",
@@ -137,5 +141,9 @@ export async function listSitemaps(): Promise<SitemapListResult> {
     }
   }
 
-  throw new Error((firstError?.message || String(firstError)) + permissionHint(candidates));
+  // exhausted: alle Accounts und Varianten sind durch, der Tool-Wrapper wiederholt nicht.
+  throw Object.assign(
+    new Error((firstError?.message || String(firstError)) + permissionHint(candidates)),
+    { exhausted: true }
+  );
 }
